@@ -11,3 +11,6 @@ from .PagamentoAlocacaoImpl import PagamentoAlocacaoImpl
 
 from .CategoriaImpl import CategoriaImpl
 from .MovimentacaoImpl import MovimentacaoImpl
+
+from .BoletoImpl import BoletoImpl
+from. PixImpl import PixImpl

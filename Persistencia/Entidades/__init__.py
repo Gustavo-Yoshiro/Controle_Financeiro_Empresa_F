@@ -11,3 +11,6 @@ from .PagamentoAlocacao import PagamentoAlocacao
 
 from .Categoria import Categoria
 from .Movimentacao import Movimentacao
+
+from.Boleto import Boleto
+from.Pix import Pix

@@ -26,3 +26,18 @@ class DividaVeiculoImpl:
         sql = "SELECT id_divida, id_veiculo, descricao, valor, data_vencimento, status FROM divida_veiculo WHERE id_veiculo = ?"
         rows = self.__bd.executar_query(sql, (id_veiculo,))
         return [DividaVeiculo(id_divida=r[0], id_veiculo=r[1], descricao=r[2], valor=r[3], data_vencimento=r[4], status=r[5]) for r in rows]
+
+    def buscar_por_id(self, id_divida: int) -> Optional[DividaVeiculo]:
+        sql = "SELECT id_divida, id_veiculo, descricao, valor, data_vencimento, status FROM divida_veiculo WHERE id_divida = ?"
+        row = self.__bd.executar_query(sql, (id_divida,), fetchone=True)
+        
+        if row:
+            return DividaVeiculo(
+                id_divida=row[0], 
+                id_veiculo=row[1], 
+                descricao=row[2], 
+                valor=row[3], 
+                data_vencimento=row[4], 
+                status=row[5]
+            )
+        return None

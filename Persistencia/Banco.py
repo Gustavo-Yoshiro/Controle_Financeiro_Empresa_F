@@ -41,17 +41,17 @@ class BancoDeDados:
                 );
             """)
 
-            # Tabela Contrato Kitnet (Arrumei os INTERGER e FKs)
+            # Tabela Contrato Kitnet
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS contrato_kitnet (
                     id_contrato_kitnet INTEGER PRIMARY KEY AUTOINCREMENT,
                     id_kitnet INTEGER NOT NULL,
                     id_inquilino INTEGER NOT NULL,
                     valor_fechado REAL,
-                    data_vencimento INTEGER NOT NULL, -- Dia do vencimento (ex: 10)
+                    data_vencimento INTEGER NOT NULL,
                     data_inicio TEXT NOT NULL,
                     data_fim TEXT,
-                    ativo INTEGER DEFAULT 1, -- 1 para Sim, 0 para Não
+                    ativo INTEGER DEFAULT 1,
                     mobiliado INTEGER DEFAULT 0,
                     obs_mobiliado TEXT,
                     pdf_caminho_contrato_kit TEXT,
@@ -60,7 +60,7 @@ class BancoDeDados:
                 );
             """)
 
-            # Tabela Pagamento Aluguel (Arrumei a FK e o CHECK)
+            # Tabela Pagamento Aluguel
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS pagamento_aluguel (
                     id_aluguel INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,7 +89,7 @@ class BancoDeDados:
                 );
             """)
 
-            # Tabela Dívidas Veículo (IPVA, Multas, etc)
+            # Tabela Dívidas Veículo
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS divida_veiculo (
                     id_divida INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,7 +102,7 @@ class BancoDeDados:
                 );
             """)
 
-            # Tabela Empresas (Clientes)
+            # Tabela Empresas
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS empresa (
                     id_empresa INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,7 +112,7 @@ class BancoDeDados:
                 );
             """)
 
-            # Tabela Contrato Alocação (Transporte)
+            # Tabela Contrato Alocação
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS contrato_alocacao (
                     id_contrato_alocacao INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -152,17 +152,19 @@ class BancoDeDados:
                 );
             """)
 
-            # Tabela Movimentações (O Extrato Geral)
-            # Aqui juntamos tudo com FKs opcionais (podem ser NULL)
+            # Tabela Movimentações (ATUALIZADA)
+            # Adicionei os campos banco e forma_pagamento aqui para instalações novas
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS movimentacao (
                     id_movimentacao INTEGER PRIMARY KEY AUTOINCREMENT,
                     descricao TEXT NOT NULL,
-                    valor REAL NOT NULL, -- Positivo ou Negativo
+                    valor REAL NOT NULL,
                     data_movimento TEXT NOT NULL,
                     id_categoria INTEGER NOT NULL,
+                    banco TEXT,              -- Campo Novo
+                    forma_pagamento TEXT,    -- Campo Novo
                     
-                    -- FKs Opcionais (Vínculos)
+                    -- FKs Opcionais
                     id_veiculo INTEGER, 
                     id_pagamento_aluguel INTEGER,
                     id_pagamento_alocacao INTEGER,
@@ -173,6 +175,53 @@ class BancoDeDados:
                     FOREIGN KEY (id_pagamento_aluguel) REFERENCES pagamento_aluguel(id_aluguel),
                     FOREIGN KEY (id_pagamento_alocacao) REFERENCES pagamento_alocacao(id_pagamento_alocacao),
                     FOREIGN KEY (id_divida_veiculo) REFERENCES divida_veiculo(id_divida)
+                );
+            """)
+
+            # --- LÓGICA DE MIGRAÇÃO ---
+            # Verifica e cria as colunas caso o banco já exista (sem deletar dados)
+            colunas_para_adicionar = [
+                ("banco", "ALTER TABLE movimentacao ADD COLUMN banco TEXT"),
+                ("forma_pagamento", "ALTER TABLE movimentacao ADD COLUMN forma_pagamento TEXT")
+            ]
+            
+            for coluna, comando_sql in colunas_para_adicionar:
+                try:
+                    # Tenta selecionar a coluna. Se falhar, é porque não existe.
+                    cursor.execute(f"SELECT {coluna} FROM movimentacao LIMIT 1")
+                except sqlite3.OperationalError:
+                    try:
+                        print(f"Migrando banco: Adicionando coluna '{coluna}'...")
+                        cursor.execute(comando_sql)
+                    except Exception as e:
+                        print(f"Erro na migração da coluna {coluna}: {e}")
+
+
+            # Tabela Boletos
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS boleto (
+                    id_boleto INTEGER PRIMARY KEY AUTOINCREMENT,
+                    descricao TEXT,
+                    valor REAL,
+                    data_vencimento TEXT,
+                    codigo_barras TEXT,
+                    id_categoria INTEGER,
+                    status TEXT,
+                    obs TEXT,
+                    banco_pagamento TEXT
+                );
+            """)
+            
+            # Tabela Pix
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pix (
+                    id_pix INTEGER PRIMARY KEY AUTOINCREMENT,
+                    titulo TEXT,
+                    chave TEXT,
+                    tipo TEXT,
+                    titular TEXT,
+                    banco TEXT,
+                    favorito INTEGER DEFAULT 0
                 );
             """)
 

@@ -55,3 +55,18 @@ class PagamentoAluguelImpl:
                 valor_pago=r[3], data_pagamento=r[4], status=r[5]
             ) for r in rows
         ]
+    
+    def buscar_por_id(self, id_aluguel: int) -> Optional[PagamentoAluguel]:
+        sql = "SELECT id_aluguel, id_contrato_kitnet, mes_referencia, valor_pago, data_pagamento, status FROM pagamento_aluguel WHERE id_aluguel = ?"
+        row = self.__bd.executar_query(sql, (id_aluguel,), fetchone=True)
+        
+        if row:
+            return PagamentoAluguel(
+                id_aluguel=row[0],
+                id_contrato_kitnet=row[1],
+                mes_referencia=row[2],
+                valor_pago=row[3],
+                data_pagamento=row[4],
+                status=row[5]
+            )
+        return None
