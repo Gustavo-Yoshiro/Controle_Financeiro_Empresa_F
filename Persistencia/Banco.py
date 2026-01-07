@@ -5,50 +5,68 @@ class BancoDeDados:
         self.nome_bd = nome_bd
 
     def conectar(self):
-        """Estabelece conexão com o banco de dados"""
-        return sqlite3.connect(self.nome_bd)
+        con = sqlite3.connect(self.nome_bd)
+        # ATIVA AS CHAVES ESTRANGEIRAS (CRUCIAL!)
+        con.execute("PRAGMA foreign_keys = ON;")
+        return con
 
     def criarBanco(self):
-        """Cria todas as tabelas necessárias para o sistema"""
         try:
             con = self.conectar()
             cursor = con.cursor()
 
-            # ===================================================
-            # 1. MÓDULO IMOBILIÁRIO (KITNETS)
-            # ===================================================
-            
-            # Tabela Kitnet
+            # 1. CONFIGURAÇÃO
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS aux_banco (
+                    id_banco INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nome TEXT NOT NULL UNIQUE
+                );
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS aux_forma_pagamento (
+                    id_forma INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nome TEXT NOT NULL UNIQUE
+                );
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS categoria (
+                    id_categoria INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nome TEXT NOT NULL,
+                    tipo TEXT CHECK(tipo IN ('receita', 'despesa'))
+                );
+            """)
+
+            # 2. KITNET
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS kitnet (
                     id_kitnet INTEGER PRIMARY KEY AUTOINCREMENT,
                     numero INTEGER,
                     quartos INTEGER DEFAULT 1,
                     preco_padrao REAL,
-                    status TEXT NOT NULL
+                    status TEXT NOT NULL,
+                    identificador TEXT DEFAULT 'K'
                 );
             """)
-
-            # Tabela Inquilino
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS inquilino (
                     id_inquilino INTEGER PRIMARY KEY AUTOINCREMENT,
                     nome TEXT NOT NULL,
                     cpf TEXT,
-                    estado_civil TEXT,
                     telefone TEXT,
-                    sexo TEXT
+                    estado_civil TEXT,
+                    profissao TEXT,
+                    sexo TEXT,
+                    email TEXT,
+                    obs TEXT
                 );
             """)
-
-            # Tabela Contrato Kitnet
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS contrato_kitnet (
                     id_contrato_kitnet INTEGER PRIMARY KEY AUTOINCREMENT,
                     id_kitnet INTEGER NOT NULL,
                     id_inquilino INTEGER NOT NULL,
                     valor_fechado REAL,
-                    data_vencimento INTEGER NOT NULL,
+                    data_vencimento INTEGER NOT NULL, -- Dia do mês (1-31)
                     data_inicio TEXT NOT NULL,
                     data_fim TEXT,
                     ativo INTEGER DEFAULT 1,
@@ -59,8 +77,6 @@ class BancoDeDados:
                     FOREIGN KEY (id_inquilino) REFERENCES inquilino(id_inquilino)
                 );
             """)
-
-            # Tabela Pagamento Aluguel
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS pagamento_aluguel (
                     id_aluguel INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,23 +89,17 @@ class BancoDeDados:
                 );
             """)
 
-            # ===================================================
-            # 2. MÓDULO TRANSPORTE (VEÍCULOS)
-            # ===================================================
-
-            # Tabela Veículos
+            # 3. VEÍCULO
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS veiculo (
                     id_veiculo INTEGER PRIMARY KEY AUTOINCREMENT,
                     modelo TEXT NOT NULL,
                     placa TEXT,
                     ano INTEGER,
-                    finalidade TEXT CHECK(finalidade IN ('trabalho', 'projeto', 'revenda')),
-                    status TEXT      CHECK(status IN ('ativo', 'oficina', 'vendido'))
+                    finalidade TEXT,
+                    status TEXT DEFAULT 'ativo'
                 );
             """)
-
-            # Tabela Dívidas Veículo
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS divida_veiculo (
                     id_divida INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,8 +111,6 @@ class BancoDeDados:
                     FOREIGN KEY (id_veiculo) REFERENCES veiculo(id_veiculo)
                 );
             """)
-
-            # Tabela Empresas
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS empresa (
                     id_empresa INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,8 +119,6 @@ class BancoDeDados:
                     telefone TEXT
                 );
             """)
-
-            # Tabela Contrato Alocação
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS contrato_alocacao (
                     id_contrato_alocacao INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -125,8 +131,6 @@ class BancoDeDados:
                     FOREIGN KEY (id_veiculo) REFERENCES veiculo(id_veiculo)
                 );
             """)
-
-            # Tabela Pagamento Alocação
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS pagamento_alocacao (
                     id_pagamento_alocacao INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,65 +143,20 @@ class BancoDeDados:
                 );
             """)
 
-            # ===================================================
-            # 3. MÓDULO FINANCEIRO (CORE)
-            # ===================================================
-
-            # Tabela Categorias
+            # 4. OUTROS
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS categoria (
-                    id_categoria INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nome TEXT NOT NULL,
-                    tipo TEXT CHECK(tipo IN ('receita', 'despesa'))
+                CREATE TABLE IF NOT EXISTS emprestimo (
+                    id_emprestimo INTEGER PRIMARY KEY AUTOINCREMENT,
+                    descricao TEXT,
+                    valor_total REAL,
+                    valor_parcela REAL,
+                    qtd_parcelas INTEGER,
+                    juros_mensal REAL,
+                    data_inicio TEXT,
+                    banco_origem TEXT,
+                    status TEXT DEFAULT 'ativo'
                 );
             """)
-
-            # Tabela Movimentações (ATUALIZADA)
-            # Adicionei os campos banco e forma_pagamento aqui para instalações novas
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS movimentacao (
-                    id_movimentacao INTEGER PRIMARY KEY AUTOINCREMENT,
-                    descricao TEXT NOT NULL,
-                    valor REAL NOT NULL,
-                    data_movimento TEXT NOT NULL,
-                    id_categoria INTEGER NOT NULL,
-                    banco TEXT,              -- Campo Novo
-                    forma_pagamento TEXT,    -- Campo Novo
-                    
-                    -- FKs Opcionais
-                    id_veiculo INTEGER, 
-                    id_pagamento_aluguel INTEGER,
-                    id_pagamento_alocacao INTEGER,
-                    id_divida_veiculo INTEGER,
-
-                    FOREIGN KEY (id_categoria) REFERENCES categoria(id_categoria),
-                    FOREIGN KEY (id_veiculo) REFERENCES veiculo(id_veiculo),
-                    FOREIGN KEY (id_pagamento_aluguel) REFERENCES pagamento_aluguel(id_aluguel),
-                    FOREIGN KEY (id_pagamento_alocacao) REFERENCES pagamento_alocacao(id_pagamento_alocacao),
-                    FOREIGN KEY (id_divida_veiculo) REFERENCES divida_veiculo(id_divida)
-                );
-            """)
-
-            # --- LÓGICA DE MIGRAÇÃO ---
-            # Verifica e cria as colunas caso o banco já exista (sem deletar dados)
-            colunas_para_adicionar = [
-                ("banco", "ALTER TABLE movimentacao ADD COLUMN banco TEXT"),
-                ("forma_pagamento", "ALTER TABLE movimentacao ADD COLUMN forma_pagamento TEXT")
-            ]
-            
-            for coluna, comando_sql in colunas_para_adicionar:
-                try:
-                    # Tenta selecionar a coluna. Se falhar, é porque não existe.
-                    cursor.execute(f"SELECT {coluna} FROM movimentacao LIMIT 1")
-                except sqlite3.OperationalError:
-                    try:
-                        print(f"Migrando banco: Adicionando coluna '{coluna}'...")
-                        cursor.execute(comando_sql)
-                    except Exception as e:
-                        print(f"Erro na migração da coluna {coluna}: {e}")
-
-
-            # Tabela Boletos
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS boleto (
                     id_boleto INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,8 +170,6 @@ class BancoDeDados:
                     banco_pagamento TEXT
                 );
             """)
-            
-            # Tabela Pix
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS pix (
                     id_pix INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -225,55 +182,66 @@ class BancoDeDados:
                 );
             """)
 
+            # 5. MOVIMENTAÇÃO (CENTRAL)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS movimentacao (
+                    id_movimentacao INTEGER PRIMARY KEY AUTOINCREMENT,
+                    descricao TEXT NOT NULL,
+                    valor REAL NOT NULL,
+                    data_movimento TEXT NOT NULL,
+                    id_categoria INTEGER NOT NULL,
+                    banco TEXT,
+                    forma_pagamento TEXT,
+                    
+                    id_veiculo INTEGER, 
+                    id_kitnet INTEGER,
+                    id_pagamento_aluguel INTEGER,
+                    id_divida_veiculo INTEGER,
+                    id_pagamento_alocacao INTEGER,
+                    
+                    FOREIGN KEY (id_categoria) REFERENCES categoria(id_categoria),
+                    FOREIGN KEY (id_veiculo) REFERENCES veiculo(id_veiculo),
+                    FOREIGN KEY (id_kitnet) REFERENCES kitnet(id_kitnet),
+                    FOREIGN KEY (id_pagamento_aluguel) REFERENCES pagamento_aluguel(id_aluguel),
+                    FOREIGN KEY (id_divida_veiculo) REFERENCES divida_veiculo(id_divida),
+                    FOREIGN KEY (id_pagamento_alocacao) REFERENCES pagamento_alocacao(id_pagamento_alocacao)
+                );
+            """)
+
+            # 6. ÍNDICES (PERFORMANCE)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_mov_data ON movimentacao(data_movimento);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_mov_cat ON movimentacao(id_categoria);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_mov_kit ON movimentacao(id_kitnet);")
+
             con.commit()
-            print("Banco de dados atualizado com sucesso!")
+            print("Banco de dados verificado/criado com sucesso e FKs ativadas!")
             
         except sqlite3.Error as erro:
-            print("Erro ao criar o banco:", erro)
+            print("Erro crítico ao criar o banco:", erro)
             raise
         finally:
             con.close()
 
-
-    def executar(self, sql, parametros=()):
-        """Executa uma query que não retorna resultados (INSERT, UPDATE, DELETE)"""
+    def executar(self, sql, params=()):
+        con = self.conectar()
+        cursor = con.cursor()
         try:
-            con = self.conectar()
-            cursor = con.cursor()
-            cursor.execute(sql, parametros)
+            cursor.execute(sql, params)
+            id_gerado = cursor.lastrowid
             con.commit()
-            return cursor.lastrowid
-        except sqlite3.Error as erro:
-            print("Erro ao executar SQL:", erro)
-            raise
-        finally:
-            con.close()
-
-    def executar_query(self, sql, parametros=(), fetchone=False):
-        """Executa uma query que retorna resultados (SELECT)"""
-        try:
-            con = self.conectar()
-            cursor = con.cursor()
-            cursor.execute(sql, parametros)
-            return cursor.fetchone() if fetchone else cursor.fetchall()
-        except sqlite3.Error as erro:
-            print("Erro ao consultar o banco de dados:", erro)
-            raise
-        finally:
-            con.close()
-    
-    def executar_multiplos(self, comandos):
-        """Executa múltiplos comandos SQL em uma única transação"""
-        try:
-            con = self.conectar()
-            cursor = con.cursor()
-            con.execute("BEGIN")
-            for sql, params in comandos:
-                cursor.execute(sql, params)
-            con.commit()
-        except sqlite3.Error as erro:
+            return id_gerado
+        except Exception as e:
             con.rollback()
-            print("Erro ao executar múltiplos comandos:", erro)
-            raise
+            raise e
+        finally:
+            con.close()
+
+    def executar_query(self, sql, params=(), fetchone=False):
+        con = self.conectar()
+        cursor = con.cursor()
+        try:
+            cursor.execute(sql, params)
+            res = cursor.fetchone() if fetchone else cursor.fetchall()
+            return res
         finally:
             con.close()

@@ -1,29 +1,31 @@
 from typing import List, Optional
 from Persistencia.Banco import BancoDeDados
-from Persistencia.Entidades.PagamentoAlocacao import PagamentoAlocacao
+from Persistencia.Entidades import PagamentoAlocacao
 
 class PagamentoAlocacaoImpl:
     def __init__(self):
         self.__bd = BancoDeDados()
 
     def salvar(self, pag: PagamentoAlocacao) -> int:
-        """
-        Gera uma nova cobrança/fatura para a empresa.
-        """
-        sql = """
-            INSERT INTO pagamento_alocacao (id_contrato_alocacao, mes_referencia, valor_esperado, status, data_pagamento) 
-            VALUES (?, ?, ?, ?, ?)
-        """
-        parametros = (
-            pag.id_contrato_alocacao,
-            pag.mes_referencia,
-            pag.valor_esperado,
-            pag.status,
-            pag.data_pagamento
-        )
-        id_gerado = self.__bd.executar(sql, parametros)
-        pag.id_pagamento_alocacao = id_gerado
-        return id_gerado
+        # PADRÃO INTELIGENTE: Se tem ID, atualiza. Se não, cria.
+        if pag.id_pagamento_alocacao:
+            self.atualizar(pag)
+            return pag.id_pagamento_alocacao
+        else:
+            sql = """
+                INSERT INTO pagamento_alocacao (id_contrato_alocacao, mes_referencia, valor_esperado, status, data_pagamento) 
+                VALUES (?, ?, ?, ?, ?)
+            """
+            parametros = (
+                pag.id_contrato_alocacao,
+                pag.mes_referencia,
+                pag.valor_esperado,
+                pag.status,
+                pag.data_pagamento
+            )
+            id_gerado = self.__bd.executar(sql, parametros)
+            pag.id_pagamento_alocacao = id_gerado
+            return id_gerado
 
     def atualizar(self, pag: PagamentoAlocacao) -> None:
         """
@@ -75,4 +77,19 @@ class PagamentoAlocacaoImpl:
                 id_pagamento_alocacao=r[0], id_contrato_alocacao=r[1], mes_referencia=r[2], 
                 valor_esperado=r[3], status=r[4], data_pagamento=r[5]
             ) for r in rows
+        ]
+        
+    def listar_todos(self) -> List[PagamentoAlocacao]:
+        sql = "SELECT id_pagamento_alocacao, id_contrato_alocacao, mes_referencia, valor_esperado, status, data_pagamento FROM pagamento_alocacao"
+        rows = self.__bd.executar_query(sql)
+        return [
+            PagamentoAlocacao(
+                id_pagamento_alocacao=r[0], 
+                id_contrato_alocacao=r[1],
+                mes_referencia=r[2], 
+                valor_esperado=r[3], 
+                status=r[4], 
+                data_pagamento=r[5]
+            )
+            for r in rows
         ]

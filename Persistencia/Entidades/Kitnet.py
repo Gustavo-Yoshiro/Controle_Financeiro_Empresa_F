@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import Optional
 
-
 @dataclass
 class Kitnet:
-    id_kitnet: Optional[int] = None
-    numero: int = 0
+    numero: int
     quartos: int = 1
     preco_padrao: float = 0.0
-    status: str = 'LIVRE' # 'LIVRE', 'OCUPADA', 'MANUTENCAO'
+    status: str = 'LIVRE'
+    identificador: str = 'K' 
+    id_kitnet: Optional[int] = None

@@ -1,60 +1,37 @@
-from typing import List, Dict, Optional
+from typing import List, Optional
 from Persistencia.Banco import BancoDeDados
+from Persistencia.Entidades import Veiculo
 
 class VeiculoImpl:
     def __init__(self):
         self.__bd = BancoDeDados()
 
-    def salvar(self, modelo: str, placa: str, ano: int, finalidade: str) -> int:
-        """
-        Cadastra um novo veículo.
-        Status padrão é 'ativo'.
-        """
-        sql = """
-        INSERT INTO veiculo (modelo, placa, ano, finalidade, status)
-        VALUES (?, ?, ?, ?, 'ativo')
-        """
-        id_gerado = self.__bd.executar(sql, (modelo, placa, ano, finalidade))
-        return id_gerado
+    def salvar(self, veiculo: Veiculo) -> int:
+        # PADRÃO INTELIGENTE: Se tem ID, atualiza. Se não, cria.
+        if veiculo.id_veiculo:
+            self.atualizar(veiculo)
+            return veiculo.id_veiculo
+        else:
+            sql = "INSERT INTO veiculo (modelo, placa, ano, finalidade, status) VALUES (?, ?, ?, ?, ?)"
+            id_gerado = self.__bd.executar(sql, (veiculo.modelo, veiculo.placa, veiculo.ano, veiculo.finalidade, veiculo.status))
+            veiculo.id_veiculo = id_gerado
+            return id_gerado
 
-    def listar_todos(self) -> List[Dict]:
-        """
-        Retorna todos os veículos para exibir na lista ou no selectbox.
-        """
-        sql = "SELECT id_veiculo, modelo, placa, ano, finalidade, status FROM veiculo"
-        rows = self.__bd.executar_query(sql)
-        
-        lista = []
-        for r in rows:
-            lista.append({
-                "id": r[0],
-                "modelo": r[1],
-                "placa": r[2],
-                "ano": r[3],
-                "finalidade": r[4],
-                "status": r[5]
-            })
-        return lista
+    def atualizar(self, veiculo: Veiculo):
+        sql = "UPDATE veiculo SET modelo=?, placa=?, ano=?, finalidade=?, status=? WHERE id_veiculo=?"
+        self.__bd.executar(sql, (veiculo.modelo, veiculo.placa, veiculo.ano, veiculo.finalidade, veiculo.status, veiculo.id_veiculo))
 
-    def buscar_por_id(self, id_veiculo: int) -> Optional[Dict]:
-        """Busca um único veículo."""
-        sql = "SELECT id_veiculo, modelo, placa, ano, finalidade, status FROM veiculo WHERE id_veiculo = ?"
+    def deletar(self, id_veiculo: int):
+        self.__bd.executar("DELETE FROM veiculo WHERE id_veiculo=?", (id_veiculo,))
+
+    def buscar_por_id(self, id_veiculo: int) -> Optional[Veiculo]:
+        sql = "SELECT id_veiculo, modelo, placa, ano, finalidade, status FROM veiculo WHERE id_veiculo=?"
         row = self.__bd.executar_query(sql, (id_veiculo,), fetchone=True)
-        
         if row:
-            return {
-                "id": row[0],
-                "modelo": row[1],
-                "placa": row[2],
-                "ano": row[3],
-                "finalidade": row[4],
-                "status": row[5]
-            }
+            return Veiculo(id_veiculo=row[0], modelo=row[1], placa=row[2], ano=row[3], finalidade=row[4], status=row[5])
         return None
 
-    def atualizar_status(self, id_veiculo: int, novo_status: str):
-        """
-        Muda o status (Ex: de 'ativo' para 'oficina').
-        """
-        sql = "UPDATE veiculo SET status = ? WHERE id_veiculo = ?"
-        self.__bd.executar(sql, (novo_status, id_veiculo))
+    def listar_todos(self) -> List[Veiculo]:
+        sql = "SELECT id_veiculo, modelo, placa, ano, finalidade, status FROM veiculo"
+        rows = self.__bd.executar_query(sql)
+        return [Veiculo(id_veiculo=r[0], modelo=r[1], placa=r[2], ano=r[3], finalidade=r[4], status=r[5]) for r in rows]

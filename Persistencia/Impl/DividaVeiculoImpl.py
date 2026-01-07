@@ -1,17 +1,22 @@
 from typing import List, Optional
 from Persistencia.Banco import BancoDeDados
-from Persistencia.Entidades.DividaVeiculo import DividaVeiculo
+from Persistencia.Entidades import DividaVeiculo
 
 class DividaVeiculoImpl:
     def __init__(self):
         self.__bd = BancoDeDados()
 
     def salvar(self, divida: DividaVeiculo) -> int:
-        sql = "INSERT INTO divida_veiculo (id_veiculo, descricao, valor, data_vencimento, status) VALUES (?, ?, ?, ?, ?)"
-        parametros = (divida.id_veiculo, divida.descricao, divida.valor, divida.data_vencimento, divida.status)
-        id_gerado = self.__bd.executar(sql, parametros)
-        divida.id_divida = id_gerado
-        return id_gerado
+        # PADRÃO INTELIGENTE: Se tem ID, atualiza. Se não, cria.
+        if divida.id_divida:
+            self.atualizar(divida)
+            return divida.id_divida
+        else:
+            sql = "INSERT INTO divida_veiculo (id_veiculo, descricao, valor, data_vencimento, status) VALUES (?, ?, ?, ?, ?)"
+            parametros = (divida.id_veiculo, divida.descricao, divida.valor, divida.data_vencimento, divida.status)
+            id_gerado = self.__bd.executar(sql, parametros)
+            divida.id_divida = id_gerado
+            return id_gerado
 
     def atualizar(self, divida: DividaVeiculo) -> None:
         sql = "UPDATE divida_veiculo SET id_veiculo=?, descricao=?, valor=?, data_vencimento=?, status=? WHERE id_divida=?"

@@ -1,124 +1,78 @@
 from typing import List, Optional
 from Persistencia.Banco import BancoDeDados
-from Persistencia.Entidades.Movimentacao import Movimentacao
+from Persistencia.Entidades import Movimentacao
 
 class MovimentacaoImpl:
     def __init__(self):
         self.__bd = BancoDeDados()
 
     def salvar(self, mov: Movimentacao) -> int:
+        # PADRÃO INTELIGENTE: Se tem ID, atualiza. Se não, cria.
         if mov.id_movimentacao:
-            # ==========================================================
-            # UPDATE (Edição)
-            # ==========================================================
-            # Atualiza os dados financeiros e de classificação
-            sql = """
-                UPDATE movimentacao 
-                SET descricao=?, valor=?, data_movimento=?, id_categoria=?, 
-                    banco=?, forma_pagamento=? 
-                WHERE id_movimentacao=?
-            """
-            params = (
-                mov.descricao, 
-                mov.valor, 
-                mov.data_movimento, 
-                mov.id_categoria, 
-                mov.banco, 
-                mov.forma_pagamento, 
-                mov.id_movimentacao
-            )
-            self.__bd.executar(sql, params)
+            self.atualizar(mov)
+            return mov.id_movimentacao
         else:
-            # ==========================================================
-            # INSERT (Novo Lançamento)
-            # ==========================================================
-            # Insere tudo, inclusive os vínculos (id_veiculo, id_aluguel, etc)
             sql = """
-                INSERT INTO movimentacao (
-                    descricao, valor, data_movimento, id_categoria, 
-                    banco, forma_pagamento, 
-                    id_veiculo, id_pagamento_aluguel, id_pagamento_alocacao, id_divida_veiculo
-                ) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO movimentacao (descricao, valor, data_movimento, id_categoria, banco, forma_pagamento, 
+                                          id_veiculo, id_kitnet, id_pagamento_aluguel, id_divida_veiculo, id_pagamento_alocacao)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             params = (
-                mov.descricao, 
-                mov.valor, 
-                mov.data_movimento, 
-                mov.id_categoria, 
-                mov.banco, 
-                mov.forma_pagamento,
-                # Campos Opcionais (FKs)
-                mov.id_veiculo, 
-                mov.id_pagamento_aluguel, 
-                mov.id_pagamento_alocacao, 
-                mov.id_divida_veiculo
+                mov.descricao, mov.valor, mov.data_movimento, mov.id_categoria, mov.banco, mov.forma_pagamento,
+                mov.id_veiculo, mov.id_kitnet, mov.id_pagamento_aluguel, mov.id_divida_veiculo, mov.id_pagamento_alocacao
             )
-            mov.id_movimentacao = self.__bd.executar(sql, params)
-            
-        return mov.id_movimentacao
+            id_gerado = self.__bd.executar(sql, params)
+            mov.id_movimentacao = id_gerado
+            return id_gerado
 
-    def excluir(self, id_movimentacao: int):
-        """Remove uma movimentação do banco"""
-        sql = "DELETE FROM movimentacao WHERE id_movimentacao=?"
-        self.__bd.executar(sql, (id_movimentacao,))
-
-    def buscar_por_id(self, id_movimentacao: int) -> Optional[Movimentacao]:
-        """Busca um único registro para edição"""
+    def atualizar(self, mov: Movimentacao):
         sql = """
-            SELECT id_movimentacao, descricao, valor, data_movimento, id_categoria, 
-                   banco, forma_pagamento, 
-                   id_veiculo, id_pagamento_aluguel, id_pagamento_alocacao, id_divida_veiculo
-            FROM movimentacao 
-            WHERE id_movimentacao = ?
+            UPDATE movimentacao 
+            SET descricao=?, valor=?, data_movimento=?, id_categoria=?, banco=?, forma_pagamento=? 
+            WHERE id_movimentacao=?
         """
-        row = self.__bd.executar_query(sql, (id_movimentacao,), fetchone=True)
-        
+        self.__bd.executar(sql, (
+            mov.descricao, mov.valor, mov.data_movimento, mov.id_categoria, 
+            mov.banco, mov.forma_pagamento, mov.id_movimentacao
+        ))
+
+    def deletar(self, id_movimentacao: int):
+        self.__bd.executar("DELETE FROM movimentacao WHERE id_movimentacao=?", (id_movimentacao,))
+
+    def buscar_por_id(self, id_mov: int) -> Optional[Movimentacao]:
+        sql = """
+            SELECT id_movimentacao, descricao, valor, data_movimento, id_categoria, banco, forma_pagamento,
+                   id_veiculo, id_kitnet, id_pagamento_aluguel, id_divida_veiculo, id_pagamento_alocacao
+            FROM movimentacao WHERE id_movimentacao=?
+        """
+        row = self.__bd.executar_query(sql, (id_mov,), fetchone=True)
         if row:
             return Movimentacao(
-                id_movimentacao=row[0],
-                descricao=row[1],
-                valor=row[2],
-                data_movimento=row[3],
-                id_categoria=row[4],
-                banco=row[5] if row[5] else "Não Informado",
-                forma_pagamento=row[6] if row[6] else "Outro",
-                id_veiculo=row[7],
-                id_pagamento_aluguel=row[8],
-                id_pagamento_alocacao=row[9],
-                id_divida_veiculo=row[10]
+                id_movimentacao=row[0], descricao=row[1], valor=row[2], data_movimento=row[3],
+                id_categoria=row[4], banco=row[5], forma_pagamento=row[6],
+                id_veiculo=row[7], id_kitnet=row[8], id_pagamento_aluguel=row[9],
+                id_divida_veiculo=row[10], id_pagamento_alocacao=row[11]
             )
         return None
 
     def listar_periodo(self, data_inicio: str, data_fim: str) -> List[Movimentacao]:
-        """Lista para extrato e relatórios"""
         sql = """
-            SELECT id_movimentacao, descricao, valor, data_movimento, id_categoria, 
-                   banco, forma_pagamento,
-                   id_veiculo, id_pagamento_aluguel, id_pagamento_alocacao, id_divida_veiculo
+            SELECT id_movimentacao, descricao, valor, data_movimento, id_categoria, banco, forma_pagamento,
+                   id_veiculo, id_kitnet, id_pagamento_aluguel, id_divida_veiculo, id_pagamento_alocacao
             FROM movimentacao 
-            WHERE data_movimento BETWEEN ? AND ? 
+            WHERE date(data_movimento) >= date(?) 
+              AND date(data_movimento) <= date(?)
             ORDER BY data_movimento DESC
         """
         rows = self.__bd.executar_query(sql, (data_inicio, data_fim))
         
         lista = []
-        for r in rows:
-            # Tratamento para dados antigos que podem vir NULL do banco
-            banco_val = r[5] if r[5] else "Antigo"
-            forma_val = r[6] if r[6] else "Outro"
-
-            lista.append(Movimentacao(
-                id_movimentacao=r[0],
-                descricao=r[1],
-                valor=r[2],
-                data_movimento=r[3],
-                id_categoria=r[4],
-                banco=banco_val,
-                forma_pagamento=forma_val,
-                id_veiculo=r[7],
-                id_pagamento_aluguel=r[8],
-                id_pagamento_alocacao=r[9],
-                id_divida_veiculo=r[10]
-            ))
+        for row in rows:
+            m = Movimentacao(
+                id_movimentacao=row[0], descricao=row[1], valor=row[2], data_movimento=row[3],
+                id_categoria=row[4], banco=row[5], forma_pagamento=row[6],
+                id_veiculo=row[7], id_kitnet=row[8], id_pagamento_aluguel=row[9],
+                id_divida_veiculo=row[10], id_pagamento_alocacao=row[11]
+            )
+            lista.append(m)
         return lista

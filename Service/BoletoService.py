@@ -1,18 +1,20 @@
-from datetime import datetime, date
 from typing import List, Dict
-from Persistencia.Impl.BoletoImpl import BoletoImpl
-from Persistencia.Impl.MovimentacaoImpl import MovimentacaoImpl
-from Persistencia.Impl.CategoriaImpl import CategoriaImpl
-from Persistencia.Entidades.Boleto import Boleto
-from Persistencia.Entidades.Movimentacao import Movimentacao
+from datetime import date, datetime
+
+from Persistencia.Impl import BoletoImpl, CategoriaImpl
+
+from Persistencia.Entidades import Boleto
+
+from Service.FinanceiroService import FinanceiroService
 
 class BoletoService:
-    def __init__(self):
+    def __init__(self, financeiro_service: FinanceiroService = None):
         self.dao_boleto = BoletoImpl()
-        self.dao_movimentacao = MovimentacaoImpl()
         self.dao_categoria = CategoriaImpl()
+        # Permite injetar ou cria novo se não passado (para evitar erro cíclico se houver)
+        self.fin_service = financeiro_service if financeiro_service else FinanceiroService()
 
-    def cadastrar_boleto(self, descricao: str, valor: float, vencimento: str, id_categoria: int, codigo: str = "") -> str:
+    def cadastrar_boleto(self, descricao: str, valor: float, vencimento: str, id_categoria: int = 2, codigo: str = "") -> str:
         novo = Boleto(
             descricao=descricao,
             valor=abs(valor),
@@ -24,33 +26,27 @@ class BoletoService:
         self.dao_boleto.salvar(novo)
         return "Boleto agendado com sucesso."
 
-    def pagar_boleto(self, id_boleto: int, banco_pagador: str, data_pagamento: str = None) -> str:
-        """
-        1. Marca boleto como pago no banco X.
-        2. Lança despesa no caixa.
-        """
+    def pagar_boleto(self, id_boleto: int, banco_pagador: str) -> str:
         boleto = self.dao_boleto.buscar_por_id(id_boleto)
-        if not boleto:
-            return "Erro: Boleto não encontrado."
-            
-        if boleto.status == 'pago':
-            return "Erro: Boleto já consta como pago."
+        if not boleto: return "Erro: Boleto não encontrado."
+        if boleto.status == 'pago': return "Erro: Já pago."
 
-        # 1. Atualiza status no módulo de Boletos
+        # 1. Atualiza Boleto
         self.dao_boleto.registrar_pagamento(id_boleto, banco_pagador)
 
-        # 2. Lança no Financeiro (Despesa)
-        data_final = data_pagamento if data_pagamento else date.today().strftime("%Y-%m-%d")
+        # 2. Lança no Financeiro
+        # Usa data de hoje + hora atual (tratado no financeiro service)
+        data_hoje = date.today().strftime("%Y-%m-%d")
         
-        mov = Movimentacao(
-            descricao=f"Pgto Boleto ({banco_pagador}): {boleto.descricao}",
-            valor= boleto.valor * -1, # Negativo para sair do caixa
-            data_movimento=data_final,
-            id_categoria=boleto.id_categoria
+        self.fin_service.registrar_gasto_manual(
+            descricao=f"Pgto Boleto: {boleto.descricao}",
+            valor=boleto.valor,
+            id_categoria=boleto.id_categoria,
+            data_gasto=data_hoje,
+            banco=banco_pagador,
+            forma="Boleto"
         )
-        self.dao_movimentacao.salvar(mov)
-        
-        return "Boleto pago e valor descontado do caixa."
+        return "Boleto pago e lançado no caixa."
 
     def listar_boletos_detalhados(self) -> List[Dict]:
         boletos = self.dao_boleto.listar_pendentes()
@@ -59,57 +55,55 @@ class BoletoService:
         hoje = date.today()
 
         for b in boletos:
+            # Busca o nome da categoria pelo ID (List comprehension segura)
             nome_cat = next((c.nome for c in categorias if c.id_categoria == b.id_categoria), "Geral")
             
-            # Cálculo de dias
             try:
                 data_venc = datetime.strptime(b.data_vencimento, "%Y-%m-%d").date()
                 delta = (data_venc - hoje).days
             except:
                 delta = 0
-                data_venc = hoje # Fallback
+                data_venc = hoje
             
-            # Visual
-            if delta < 0:
-                status_texto = f"VENCIDO HÁ {abs(delta)} DIAS"
-                cor = "red"
-                bg = "#ffcccc"
-            elif delta == 0:
-                status_texto = "VENCE HOJE"
-                cor = "orange"
-                bg = "#fff5cc"
-            elif delta <= 3:
-                status_texto = f"Vence em {delta} dias"
-                cor = "orange"
-                bg = "white"
-            else:
-                status_texto = f"Vence em {delta} dias"
-                cor = "blue"
-                bg = "white"
+            # Status Visual para o Front-end
+            if delta < 0: status_texto = f"VENCIDO HÁ {abs(delta)} DIAS"
+            elif delta == 0: status_texto = "VENCE HOJE"
+            else: status_texto = f"Vence em {delta} dias"
 
             lista_final.append({
                 "id": b.id_boleto,
                 "descricao": b.descricao,
                 "valor": b.valor,
+                "categoria": nome_cat, 
                 "vencimento_br": data_venc.strftime("%d/%m/%Y"),
-                "categoria": nome_cat,
                 "status_texto": status_texto,
-                "cor_status": cor,
-                "bg_color": bg,
                 "codigo": b.codigo_barras
             })
         
         return lista_final
 
     def calcular_totais(self) -> Dict:
-        boletos = self.listar_boletos_detalhados()
-        total_pagar = sum(b['valor'] for b in boletos)
-        
-        # Filtro simples para mês atual
-        mes_atual = date.today().month
-        total_mes = sum(b['valor'] for b in boletos if datetime.strptime(b['vencimento_br'], "%d/%m/%Y").month == mes_atual)
+        boletos = self.dao_boleto.listar_pendentes()
+        total_pagar = sum(b.valor for b in boletos)
+        return {"total_geral": total_pagar}
 
-        return {
-            "total_geral": total_pagar,
-            "total_mes": total_mes
-        }
+    # --- MÉTODOS DE ADMINISTRAÇÃO (PARA A PAGE CONFIGURAÇÕES) ---
+
+    def admin_listar_todos(self) -> List[Boleto]:
+        return self.dao_boleto.listar_todos()
+
+    def admin_editar(self, id_b: int, desc: str, val: float, venc: str, st: str, banco: str) -> str:
+        b = self.dao_boleto.buscar_por_id(id_b)
+        if b:
+            b.descricao = desc
+            b.valor = val
+            b.data_vencimento = venc
+            b.status = st
+            b.banco_pagamento = banco
+            self.dao_boleto.salvar(b) # Salvar com ID faz update automaticamente (Smart Save)
+            return "Boleto atualizado."
+        return "Erro: Boleto não achado."
+
+    def admin_excluir(self, id_b: int) -> str:
+        self.dao_boleto.deletar(id_b)
+        return "Boleto excluído."
