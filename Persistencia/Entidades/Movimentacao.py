@@ -9,8 +9,11 @@ class Movimentacao:
     id_categoria: int
     banco: Optional[str] = "Não Informado"
     forma_pagamento: Optional[str] = "Outro"
+    
+    # IDs / Vínculos
     id_veiculo: Optional[int] = None
-    id_kitnet: Optional[int] = None 
+    id_kitnet: Optional[int] = None
+    identificador_bloco: Optional[str] = None 
     id_pagamento_aluguel: Optional[int] = None
     id_pagamento_alocacao: Optional[int] = None
     id_divida_veiculo: Optional[int] = None

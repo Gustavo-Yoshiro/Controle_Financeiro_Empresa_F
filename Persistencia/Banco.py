@@ -1,4 +1,5 @@
 import sqlite3
+import os
 
 class BancoDeDados:
     def __init__(self, nome_bd="financas.db"):
@@ -66,7 +67,8 @@ class BancoDeDados:
                     id_kitnet INTEGER NOT NULL,
                     id_inquilino INTEGER NOT NULL,
                     valor_fechado REAL,
-                    data_vencimento INTEGER NOT NULL, -- Dia do mês (1-31)
+                    valor_esgoto_padrao REAL DEFAULT 0.0,
+                    data_vencimento INTEGER NOT NULL, 
                     data_inicio TEXT NOT NULL,
                     data_fim TEXT,
                     ativo INTEGER DEFAULT 1,
@@ -82,9 +84,11 @@ class BancoDeDados:
                     id_aluguel INTEGER PRIMARY KEY AUTOINCREMENT,
                     id_contrato_kitnet INTEGER NOT NULL,
                     mes_referencia TEXT,
+                    valor_esperado REAL,
                     valor_pago REAL DEFAULT 0.0,
                     data_pagamento TEXT,
-                    status TEXT CHECK(status IN ('pendente', 'pago', 'atrasado')),
+                    status TEXT CHECK(status IN ('pendente', 'pago', 'atrasado', 'parcial')),
+                    obs TEXT,
                     FOREIGN KEY (id_contrato_kitnet) REFERENCES contrato_kitnet(id_contrato_kitnet)
                 );
             """)
@@ -182,7 +186,7 @@ class BancoDeDados:
                 );
             """)
 
-            # 5. MOVIMENTAÇÃO (CENTRAL)
+            # 5. MOVIMENTAÇÃO (CENTRAL) 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS movimentacao (
                     id_movimentacao INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -195,6 +199,7 @@ class BancoDeDados:
                     
                     id_veiculo INTEGER, 
                     id_kitnet INTEGER,
+                    identificador_bloco TEXT, -- <--- CAMPO NOVO ADICIONADO AQUI
                     id_pagamento_aluguel INTEGER,
                     id_divida_veiculo INTEGER,
                     id_pagamento_alocacao INTEGER,
@@ -214,7 +219,7 @@ class BancoDeDados:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_mov_kit ON movimentacao(id_kitnet);")
 
             con.commit()
-            print("Banco de dados verificado/criado com sucesso e FKs ativadas!")
+            print("Banco de dados criado com sucesso e FKs ativadas!")
             
         except sqlite3.Error as erro:
             print("Erro crítico ao criar o banco:", erro)

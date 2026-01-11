@@ -7,6 +7,7 @@ class ContratoKitnet:
     id_kitnet: int = 0
     id_inquilino: int = 0
     valor_fechado: float = 0.0
+    valor_esgoto_padrao: float = 0.0 # <--- Novo Campo
     data_vencimento: int = 10     
     data_inicio: str = ""         
     data_fim: Optional[str] = None

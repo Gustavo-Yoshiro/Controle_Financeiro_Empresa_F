@@ -12,34 +12,44 @@ class PagamentoAluguelImpl:
             self.atualizar(pag)
             return pag.id_aluguel
         else:
+            # ADICIONADO: valor_esperado e obs
             sql = """
-                INSERT INTO pagamento_aluguel (id_contrato_kitnet, mes_referencia, valor_pago, data_pagamento, status)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO pagamento_aluguel 
+                (id_contrato_kitnet, mes_referencia, valor_esperado, valor_pago, data_pagamento, status, obs)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """
-            id_gerado = self.__bd.executar(sql, (
+            parametros = (
                 pag.id_contrato_kitnet, 
                 pag.mes_referencia, 
+                pag.valor_esperado, # <--- Novo
                 pag.valor_pago, 
                 pag.data_pagamento, 
-                pag.status
-            ))
+                pag.status,
+                pag.obs             # <--- Novo
+            )
+            id_gerado = self.__bd.executar(sql, parametros)
             pag.id_aluguel = id_gerado
             return id_gerado
 
     def atualizar(self, pag: PagamentoAluguel):
+        # ADICIONADO: valor_esperado e obs
         sql = """
             UPDATE pagamento_aluguel 
-            SET id_contrato_kitnet=?, mes_referencia=?, valor_pago=?, data_pagamento=?, status=? 
+            SET id_contrato_kitnet=?, mes_referencia=?, valor_esperado=?, 
+                valor_pago=?, data_pagamento=?, status=?, obs=? 
             WHERE id_aluguel=?
         """
-        self.__bd.executar(sql, (
+        parametros = (
             pag.id_contrato_kitnet, 
             pag.mes_referencia, 
+            pag.valor_esperado, # <--- Novo
             pag.valor_pago, 
             pag.data_pagamento, 
             pag.status, 
+            pag.obs,            # <--- Novo
             pag.id_aluguel
-        ))
+        )
+        self.__bd.executar(sql, parametros)
 
     def deletar(self, id_aluguel: int) -> None:
         sql = "DELETE FROM pagamento_aluguel WHERE id_aluguel = ?"
@@ -47,38 +57,68 @@ class PagamentoAluguelImpl:
 
     def buscar_por_id(self, id_pagamento: int) -> Optional[PagamentoAluguel]:
         sql = """
-            SELECT id_aluguel, id_contrato_kitnet, mes_referencia, valor_pago, data_pagamento, status 
+            SELECT id_aluguel, id_contrato_kitnet, mes_referencia, valor_esperado, 
+                   valor_pago, data_pagamento, status, obs 
             FROM pagamento_aluguel WHERE id_aluguel = ?
         """
         row = self.__bd.executar_query(sql, (id_pagamento,), fetchone=True)
         if row:
             return PagamentoAluguel(
-                id_aluguel=row[0], id_contrato_kitnet=row[1], mes_referencia=row[2], 
-                valor_pago=row[3], data_pagamento=row[4], status=row[5]
+                id_aluguel=row[0], 
+                id_contrato_kitnet=row[1], 
+                mes_referencia=row[2], 
+                valor_esperado=row[3], # <--- Novo
+                valor_pago=row[4], 
+                data_pagamento=row[5], 
+                status=row[6],
+                obs=row[7]             # <--- Novo
             )
         return None
 
     def listar_pendentes(self) -> List[PagamentoAluguel]:
-        """ Retorna apenas o que ainda não foi pago para preencher o Selectbox """
+        """ 
+        Retorna o que não foi pago (pendente) OU foi pago parcialmente (parcial)
+        para preencher o Selectbox de recebimento.
+        """
         sql = """
-            SELECT id_aluguel, id_contrato_kitnet, mes_referencia, valor_pago, data_pagamento, status 
-            FROM pagamento_aluguel WHERE status = 'pendente'
+            SELECT id_aluguel, id_contrato_kitnet, mes_referencia, valor_esperado, 
+                   valor_pago, data_pagamento, status, obs 
+            FROM pagamento_aluguel 
+            WHERE status IN ('pendente', 'parcial') 
+            ORDER BY mes_referencia ASC
         """
         rows = self.__bd.executar_query(sql)
         
         return [
             PagamentoAluguel(
-                id_aluguel=r[0], id_contrato_kitnet=r[1], mes_referencia=r[2], 
-                valor_pago=r[3], data_pagamento=r[4], status=r[5]
+                id_aluguel=r[0], 
+                id_contrato_kitnet=r[1], 
+                mes_referencia=r[2], 
+                valor_esperado=r[3], 
+                valor_pago=r[4], 
+                data_pagamento=r[5], 
+                status=r[6],
+                obs=r[7]
             ) for r in rows
         ]
 
     def listar_todos(self) -> List[PagamentoAluguel]:
-        sql = "SELECT id_aluguel, id_contrato_kitnet, mes_referencia, valor_pago, data_pagamento, status FROM pagamento_aluguel"
+        sql = """
+            SELECT id_aluguel, id_contrato_kitnet, mes_referencia, valor_esperado, 
+                   valor_pago, data_pagamento, status, obs 
+            FROM pagamento_aluguel
+            ORDER BY mes_referencia DESC
+        """
         rows = self.__bd.executar_query(sql)
         return [
             PagamentoAluguel(
-                id_aluguel=r[0], id_contrato_kitnet=r[1], mes_referencia=r[2], 
-                valor_pago=r[3], data_pagamento=r[4], status=r[5]
+                id_aluguel=r[0], 
+                id_contrato_kitnet=r[1], 
+                mes_referencia=r[2], 
+                valor_esperado=r[3], 
+                valor_pago=r[4], 
+                data_pagamento=r[5], 
+                status=r[6],
+                obs=r[7]
             ) for r in rows
         ]

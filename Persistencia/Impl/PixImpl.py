@@ -42,3 +42,15 @@ class PixImpl:
         if row:
             return Pix(id_pix=row[0], titulo=row[1], chave=row[2], tipo=row[3], titular=row[4], banco=row[5], favorito=row[6])
         return None
+
+    def buscar_por_chave(self, chave: str) -> bool:
+        """Retorna True se a chave já existir no banco"""
+        sql = "SELECT id_pix FROM pix WHERE chave = ?"
+        row = self.__bd.executar_query(sql, (chave,), fetchone=True)
+        return row is not None
+   
+
+    def atualizar_favorito(self, id_pix: int, novo_status: int):
+        """ Atualiza apenas o campo favorito de um Pix específico """
+        sql = "UPDATE pix SET favorito = ? WHERE id_pix = ?"
+        self.__bd.executar(sql, (novo_status, id_pix))

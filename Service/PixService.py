@@ -1,22 +1,31 @@
 from typing import List, Optional
-from Persistencia.Impl import PixImpl
-from Persistencia.Entidades import Pix
+from Persistencia.Impl.PixImpl import PixImpl
+from Persistencia.Entidades.Pix import Pix
 
 class PixService:
     def __init__(self):
         self.dao = PixImpl()
 
-    def cadastrar_pix(self, titulo: str, chave: str, tipo: str, titular: str, banco: str) -> str:
-        novo = Pix(
-            titulo=titulo, 
-            chave=chave, 
-            tipo=tipo, 
-            titular=titular, 
-            banco=banco, 
+    def cadastrar_pix(self, titulo, chave, tipo, titular, banco) -> str:
+        # 1. VERIFICA DUPLICIDADE
+        # Remove espaços em branco das pontas para garantir
+        chave_limpa = chave.strip()
+        
+        if self.dao.buscar_por_chave(chave_limpa):
+            return f"Erro: A chave '{chave_limpa}' já está cadastrada!"
+
+        # 2. SE NÃO EXISTE, SALVA
+        novo_pix = Pix(
+            titulo=titulo,
+            chave=chave_limpa,
+            tipo=tipo,
+            titular=titular,
+            banco=banco,
             favorito=0
         )
-        self.dao.salvar(novo)
-        return "Chave Pix salva com sucesso!"
+        self.dao.salvar(novo_pix)
+        return "Sucesso: Nova chave Pix cadastrada!"
+
 
     def editar_pix(self, id_pix: int, titulo: str, chave: str, tipo: str, titular: str, banco: str) -> str:
         # 1. Busca o objeto original usando o DAO
@@ -58,3 +67,7 @@ class PixService:
 
     def buscar_por_id(self, id_pix: int) -> Optional[Pix]:
         return self.dao.buscar_por_id(id_pix)
+    
+    def alternar_favorito(self, id_pix: int, novo_status: int):
+        # O Service apenas confia no status que a Page mandou e repassa pro DAO
+        self.dao.atualizar_favorito(id_pix, novo_status)

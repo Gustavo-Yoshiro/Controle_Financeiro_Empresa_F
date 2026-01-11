@@ -21,6 +21,7 @@ def inicializar_sistema():
     Garante que tabelas e dados básicos existam.
     """
     bd = BancoDeDados()
+    bd.criarBanco()
     
     populador = PopulacaoInicial()
     populador.popular_categorias_padrao()
