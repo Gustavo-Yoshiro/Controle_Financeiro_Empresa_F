@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import date
+from datetime import date, timedelta
 
 class DividasPage:
     def __init__(self, boleto_service, emprestimo_service, config_service):
@@ -67,6 +67,15 @@ class DividasPage:
                         with cols[0]:
                             st.markdown(f"**{b['descricao']}**")
                             st.caption(f"Cat: {b.get('categoria', '-')} | Vence: {b['vencimento_br']}")
+                            
+                            # --- NOVIDADE: CÓDIGO DE BARRAS COPIÁVEL ---
+                            # Se tiver código, mostra o widget de copiar
+                            cod_barras = b.get('codigo_barras')
+                            if cod_barras and len(cod_barras) > 5:
+                                # st.code gera o botão de copiar automaticamente
+                                st.code(cod_barras, language="text")
+                            # -------------------------------------------
+
                             if "ATRASADO" in b['status_texto']:
                                 st.error(b['status_texto'])
                             else:
@@ -98,30 +107,43 @@ class DividasPage:
         with tab_emprestimos:
             bancos_opcoes = self.cfg.listar_bancos() or ["Dinheiro"]
             
-            st.info("ℹ️ Ao contratar um empréstimo aqui, as parcelas serão geradas automaticamente na aba 'Contas a Pagar'.")
+            st.info("ℹ️ Ao contratar um empréstimo aqui, o dinheiro entra no caixa hoje e as parcelas são geradas automaticamente.")
 
             with st.expander("➕ Contratar Novo Empréstimo", expanded=False):
                 with st.form("form_emp"):
                     desc = st.text_input("Descrição (Ex: Financiamento Carro)")
                     
                     c1, c2, c3 = st.columns(3)
-                    v_total = c1.number_input("Valor Recebido (R$)", min_value=100.0, step=100.0)
+                    v_recebido = c1.number_input("Valor Recebido (Líquido)", min_value=100.0, step=100.0)
                     v_parc = c2.number_input("Valor da Parcela (R$)", min_value=10.0, step=10.0)
                     qtd = c3.number_input("Qtd Parcelas", min_value=1, step=1)
                     
+                    # --- DATAS ---
                     c4, c5 = st.columns(2)
-                    dt = c4.date_input("Data Liberação", value=date.today())
+                    hoje = date.today()
+                    
+                    dt_liberacao = c4.date_input("Data Liberação (Dinheiro)", value=hoje)
+                    dt_primeira = c4.date_input("Data 1ª Parcela", value=hoje + timedelta(days=30))
+                    
                     banco = c5.selectbox("Onde caiu o dinheiro?", bancos_opcoes)
                     
                     # Simulação Visual
                     total_pagar = v_parc * qtd
-                    juros_totais = total_pagar - v_total
+                    juros_totais = total_pagar - v_recebido
                     
-                    st.caption(f"💰 **Resumo:** Entra **R$ {v_total:.2f}** | Sai **R$ {total_pagar:.2f}** (Juros: R$ {juros_totais:.2f})")
+                    st.caption(f"💰 **Resumo:** Entra **R$ {v_recebido:.2f}** | Sai **R$ {total_pagar:.2f}** (Juros: R$ {juros_totais:.2f})")
                     
                     if st.form_submit_button("✅ Confirmar Contrato"):
                         try:
-                            msg = self.emp.contratar_emprestimo(desc, v_total, v_parc, int(qtd), str(dt), banco)
+                            msg = self.emp.contratar_emprestimo(
+                                descricao=desc, 
+                                valor_pego=v_recebido, 
+                                valor_parcela=v_parc, 
+                                qtd_parcelas=int(qtd), 
+                                data_liberacao=str(dt_liberacao), 
+                                data_primeira_parcela=str(dt_primeira), 
+                                banco=banco
+                            )
                             st.success(msg)
                             st.balloons()
                             st.rerun()
@@ -134,16 +156,22 @@ class DividasPage:
             lista = self.emp.listar_emprestimos()
             if lista:
                 for e in lista:
-                    total_final = e.valor_parcela * e.qtd_parcelas
-                    with st.container(border=True):
-                        c1, c2 = st.columns([3, 1.5])
-                        with c1:
-                            st.markdown(f"### 🏦 {e.descricao}")
-                            st.write(f"Valor Original: **R$ {e.valor_total:.2f}**")
-                            st.write(f"Parcela: **R$ {e.valor_parcela:.2f}** em {e.qtd_parcelas}x")
-                            st.caption(f"Banco: {e.banco_origem} | Início: {e.data_inicio}")
+                    if e.status == 'ativo':
+                        # Calculando dívida real
+                        divida_total = e.valor_total
+                        ja_pago = e.valor_pago
+                        falta = divida_total - ja_pago
                         
-                        with c2:
-                            st.metric("Total da Dívida", f"R$ {total_final:.2f}")
+                        with st.container(border=True):
+                            c1, c2 = st.columns([3, 1.5])
+                            with c1:
+                                st.markdown(f"### 🏦 {e.descricao}")
+                                st.write(f"Valor Original: **R$ {divida_total:.2f}**")
+                                st.write(f"Parcela: **R$ {e.valor_parcela:.2f}** ({e.qtd_parcelas}x)")
+                                st.caption(f"Início: {e.data_inicio} | 1ª Parc: {e.data_primeira_parcela}")
+                            
+                            with c2:
+                                st.metric("Saldo Devedor", f"R$ {falta:,.2f}", delta="-Pendente", delta_color="inverse")
+                                st.caption(f"Já pago: R$ {ja_pago:,.2f}")
             else:
                 st.info("Nenhum empréstimo ativo.")

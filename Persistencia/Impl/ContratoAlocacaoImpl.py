@@ -7,34 +7,94 @@ class ContratoAlocacaoImpl:
         self.__bd = BancoDeDados()
 
     def salvar(self, contrato: ContratoAlocacao) -> int:
-        # PADRÃO INTELIGENTE: Se tem ID, atualiza. Se não, cria.
         if contrato.id_contrato_alocacao:
             self.atualizar(contrato)
             return contrato.id_contrato_alocacao
         else:
-            sql = """INSERT INTO contrato_alocacao (id_empresa, id_veiculo, valor_mensal, dia_vencimento, ativo) 
-                     VALUES (?, ?, ?, ?, ?)"""
-            parametros = (contrato.id_empresa, contrato.id_veiculo, contrato.valor_mensal, contrato.dia_vencimento, contrato.ativo)
+            sql = """
+                INSERT INTO contrato_alocacao 
+                (id_empresa, id_veiculo, valor_mensal, dia_vencimento, ativo, data_inicio, data_fim) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """
+            parametros = (
+                contrato.id_empresa, 
+                contrato.id_veiculo, 
+                contrato.valor_mensal, 
+                contrato.dia_vencimento, 
+                contrato.ativo,
+                contrato.data_inicio, 
+                contrato.data_fim     
+            )
             id_gerado = self.__bd.executar(sql, parametros)
             contrato.id_contrato_alocacao = id_gerado
             return id_gerado
 
     def atualizar(self, contrato: ContratoAlocacao) -> None:
-        sql = """UPDATE contrato_alocacao SET id_empresa=?, id_veiculo=?, valor_mensal=?, dia_vencimento=?, ativo=? 
-                 WHERE id_contrato_alocacao=?"""
-        parametros = (contrato.id_empresa, contrato.id_veiculo, contrato.valor_mensal, contrato.dia_vencimento, contrato.ativo, contrato.id_contrato_alocacao)
+        sql = """
+            UPDATE contrato_alocacao 
+            SET id_empresa=?, id_veiculo=?, valor_mensal=?, dia_vencimento=?, ativo=?, data_inicio=?, data_fim=?
+            WHERE id_contrato_alocacao=?
+        """
+        parametros = (
+            contrato.id_empresa, 
+            contrato.id_veiculo, 
+            contrato.valor_mensal, 
+            contrato.dia_vencimento, 
+            contrato.ativo,
+            contrato.data_inicio, 
+            contrato.data_fim,    
+            contrato.id_contrato_alocacao
+        )
         self.__bd.executar(sql, parametros)
 
     def deletar(self, id_contrato: int) -> None:
         self.__bd.executar("DELETE FROM contrato_alocacao WHERE id_contrato_alocacao=?", (id_contrato,))
 
     def listar_ativos(self) -> List[ContratoAlocacao]:
-        sql = "SELECT id_contrato_alocacao, id_empresa, id_veiculo, valor_mensal, dia_vencimento, ativo FROM contrato_alocacao WHERE ativo = 1"
+        # Adicionei os campos no SELECT
+        sql = """
+            SELECT id_contrato_alocacao, id_empresa, id_veiculo, valor_mensal, dia_vencimento, ativo, data_inicio, data_fim 
+            FROM contrato_alocacao WHERE ativo = 1
+        """
         rows = self.__bd.executar_query(sql)
-        return [ContratoAlocacao(id_contrato_alocacao=r[0], id_empresa=r[1], id_veiculo=r[2], valor_mensal=r[3], dia_vencimento=r[4], ativo=r[5]) for r in rows]
+        return [
+            ContratoAlocacao(
+                id_contrato_alocacao=r[0], 
+                id_empresa=r[1], 
+                id_veiculo=r[2], 
+                valor_mensal=r[3], 
+                dia_vencimento=r[4], 
+                ativo=r[5],
+                data_inicio=r[6], 
+                data_fim=r[7]     
+            ) for r in rows
+        ]
+        
+    def listar_todos(self) -> List[ContratoAlocacao]:
+        # Útil para histórico
+        sql = """
+            SELECT id_contrato_alocacao, id_empresa, id_veiculo, valor_mensal, dia_vencimento, ativo, data_inicio, data_fim 
+            FROM contrato_alocacao
+        """
+        rows = self.__bd.executar_query(sql)
+        return [
+            ContratoAlocacao(
+                id_contrato_alocacao=r[0], 
+                id_empresa=r[1], 
+                id_veiculo=r[2], 
+                valor_mensal=r[3], 
+                dia_vencimento=r[4], 
+                ativo=r[5],
+                data_inicio=r[6],
+                data_fim=r[7]
+            ) for r in rows
+        ]
     
     def buscar_por_id(self, id_contrato: int) -> Optional[ContratoAlocacao]:
-        sql = "SELECT id_contrato_alocacao, id_empresa, id_veiculo, valor_mensal, dia_vencimento, ativo FROM contrato_alocacao WHERE id_contrato_alocacao = ?"
+        sql = """
+            SELECT id_contrato_alocacao, id_empresa, id_veiculo, valor_mensal, dia_vencimento, ativo, data_inicio, data_fim 
+            FROM contrato_alocacao WHERE id_contrato_alocacao = ?
+        """
         row = self.__bd.executar_query(sql, (id_contrato,), fetchone=True)
         
         if row:
@@ -44,6 +104,8 @@ class ContratoAlocacaoImpl:
                 id_veiculo=row[2], 
                 valor_mensal=row[3], 
                 dia_vencimento=row[4], 
-                ativo=row[5]
+                ativo=row[5],
+                data_inicio=row[6], 
+                data_fim=row[7]     
             )
         return None

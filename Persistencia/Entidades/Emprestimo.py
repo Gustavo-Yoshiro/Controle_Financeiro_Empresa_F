@@ -7,8 +7,11 @@ class Emprestimo:
     valor_total: float
     valor_parcela: float
     qtd_parcelas: int
-    data_inicio: str
+    juros_mensal: float
+    data_inicio: str        
+    data_primeira_parcela: str 
     banco_origem: str
-    juros_mensal: float = 0.0
+    
+    valor_pago: float = 0.0
     status: str = 'ativo'
     id_emprestimo: Optional[int] = None

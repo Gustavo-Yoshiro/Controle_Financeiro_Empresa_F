@@ -9,33 +9,38 @@ from Service import FinanceiroService, BoletoService
 class EmprestimoService:
     def __init__(self, financeiro_service: FinanceiroService = None):
         self.dao = EmprestimoImpl()
-        # Injeção ou Instanciação direta
         self.fin_service = financeiro_service if financeiro_service else FinanceiroService()
         self.bol_service = BoletoService(self.fin_service)
 
     # --- MÉTODOS DE USO GERAL (PARA A PAGE EMPRÉSTIMOS) ---
 
     def contratar_emprestimo(self, descricao: str, valor_pego: float, valor_parcela: float, 
-                             qtd_parcelas: int, data_liberacao: str, banco: str) -> str:
+                             qtd_parcelas: int, data_liberacao: str, data_primeira_parcela: str, # <--- NOVA DATA
+                             banco: str) -> str:
         
-        # 1. Salva o Contrato
+        # Cálculo do Total Real da Dívida (Com Juros)
+        valor_divida_total = valor_parcela * qtd_parcelas
+
+        # 1. Salva o Contrato (Entidade para controle de Dívida Total)
         novo_emp = Emprestimo(
             descricao=descricao,
-            valor_total=valor_pego,
+            valor_total=valor_divida_total, # Salva o total com juros
             valor_parcela=valor_parcela,
             qtd_parcelas=qtd_parcelas,
-            juros_mensal=0.0,
+            juros_mensal=0.0, # Pode implementar cálculo depois se quiser
             data_inicio=data_liberacao,
+            data_primeira_parcela=data_primeira_parcela, # <--- SALVA A DATA DE CORTE
             banco_origem=banco,
+            valor_pago=0.0,
             status='ativo'
         )
         self.dao.salvar(novo_emp)
 
-        # 2. Lança a Entrada do Dinheiro (Receita)
+        # 2. Lança a Entrada do Dinheiro (Receita no Caixa HOJE)
         self.fin_service.registrar_receita_manual(
             descricao=f"Entrada Empréstimo: {descricao}",
-            valor=valor_pego,
-            id_categoria=1, # 1 = Receita
+            valor=valor_pego, # Entra só o liquido que pegou
+            id_categoria=1,   # 1 = Receita
             data=data_liberacao,
             banco=banco,
             forma="Transferência"
@@ -43,33 +48,37 @@ class EmprestimoService:
 
         # 3. Gera as Parcelas no "Contas a Pagar" (Boletos Futuros)
         try:
-            data_base = datetime.strptime(data_liberacao, "%Y-%m-%d")
+            # A data base para os boletos é a da PRIMEIRA PARCELA
+            data_base_pagto = datetime.strptime(data_primeira_parcela, "%Y-%m-%d")
         except:
-            data_base = datetime.now()
+            data_base_pagto = datetime.now()
 
         for i in range(qtd_parcelas):
-            # Calcula data: +1 mês, +2 meses... (Usa dateutil para virar o ano corretamente)
-            data_venc = data_base + relativedelta(months=+(i+1))
+            # Lógica de Vencimento:
+            # i=0 (1ª parc) -> data_base + 0 meses = Data Primeira Parcela
+            # i=1 (2ª parc) -> data_base + 1 mês
+            data_venc = data_base_pagto + relativedelta(months=+i)
             data_fmt = data_venc.strftime("%Y-%m-%d")
             
             num_parcela = i + 1
             desc_parcela = f"Parc. {num_parcela}/{qtd_parcelas} - {descricao}"
             
-            # Cadastra no BoletoService (Isso vai aparecer na tela de Boletos/Contas)
+            # Cadastra no BoletoService
+            # Isso alimenta o "A Pagar (Mês)" do Dashboard automaticamente
             self.bol_service.cadastrar_boleto(
                 descricao=desc_parcela,
                 valor=valor_parcela,
                 vencimento=data_fmt,
-                id_categoria=2, 
+                id_categoria=2, # Supondo Categoria 2 = Despesa ou Empréstimo
                 codigo="" 
             )
 
-        return f"Empréstimo de R$ {valor_pego:.2f} registrado! {qtd_parcelas} parcelas geradas em Contas a Pagar."
+        return f"Empréstimo registrado! Dívida Total: R$ {valor_divida_total:.2f}. Entrada: R$ {valor_pego:.2f}."
 
     def listar_emprestimos(self) -> List[Emprestimo]:
         return self.dao.listar_todos()
 
-    # --- MÉTODOS DE ADMINISTRAÇÃO (PARA A PAGE CONFIGURAÇÕES) ---
+    # --- MÉTODOS DE ADMINISTRAÇÃO ---
 
     def admin_editar(self, id_e: int, desc: str, total: float, st: str) -> str:
         e = self.dao.buscar_por_id(id_e)

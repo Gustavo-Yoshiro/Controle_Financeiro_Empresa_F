@@ -131,6 +131,8 @@ class BancoDeDados:
                     valor_mensal REAL NOT NULL,
                     dia_vencimento INTEGER,
                     ativo INTEGER DEFAULT 1,
+                    data_inicio TEXT, 
+                    data_fim TEXT,    
                     FOREIGN KEY (id_empresa) REFERENCES empresa(id_empresa),
                     FOREIGN KEY (id_veiculo) REFERENCES veiculo(id_veiculo)
                 );
@@ -141,6 +143,7 @@ class BancoDeDados:
                     id_contrato_alocacao INTEGER NOT NULL,
                     mes_referencia TEXT,
                     valor_esperado REAL,
+                    valor_pago REAL DEFAULT 0.0, 
                     status TEXT CHECK(status IN ('pendente', 'pago', 'atrasado')),
                     data_pagamento TEXT,
                     FOREIGN KEY (id_contrato_alocacao) REFERENCES contrato_alocacao(id_contrato_alocacao)
@@ -156,8 +159,10 @@ class BancoDeDados:
                     valor_parcela REAL,
                     qtd_parcelas INTEGER,
                     juros_mensal REAL,
-                    data_inicio TEXT,
+                    data_inicio TEXT,            -- Data que o dinheiro caiu
+                    data_primeira_parcela TEXT,  -- <--- NOVO: Data que começa a pagar
                     banco_origem TEXT,
+                    valor_pago REAL DEFAULT 0.0,
                     status TEXT DEFAULT 'ativo'
                 );
             """)
