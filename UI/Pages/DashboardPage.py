@@ -56,11 +56,11 @@ class DashboardPage:
         # 2. CÁLCULO DA "VERDADE"
         # =====================================================================
         
-        # Busca dados (Fluxo do periodo + Dívida Total)
+        # Busca dados detalhados (agora vem separado cartão e boletos)
         resumo = self.s_relatorio.get_resumo_periodo(str(dt_ini), str(dt_fim), ver_acumulado=acumular)
 
-        # MUDANÇA CRUCIAL:
-        # A conta agora é: Saldo Atual - Dívida TOTAL (Passado, Presente e Futuro)
+        # A conta: Saldo - Tudo que devo (Boletos + Cartão + Empréstimos)
+        # O campo 'divida_total' do service já soma tudo isso.
         saldo_disponivel_real = resumo['saldo'] - resumo['divida_total']
 
         st.divider()
@@ -69,14 +69,14 @@ class DashboardPage:
         if saldo_disponivel_real < 0:
             st.error(f"""
             ### 🚨 SITUAÇÃO CRÍTICA
-            O dinheiro na conta **JÁ TEM DONO** (Empréstimos/Boletos Futuros).
-            \n**Faltam R$ {abs(saldo_disponivel_real):,.2f} para cobrir todos os compromissos.**
+            O dinheiro na conta **JÁ TEM DONO**.
+            \n**Faltam R$ {abs(saldo_disponivel_real):,.2f} para cobrir Contas, Cartões e Empréstimos.**
             """, icon="🛑")
             
         elif saldo_disponivel_real < 1000: 
             st.warning(f"""
-            ### ⚠️ ALERTA: CAIXA CURTO
-            Considerando todas as dívidas futuras, sobram apenas **R$ {saldo_disponivel_real:,.2f}**.
+            ### ⚠️ ALERTA: MARGEM PEQUENA
+            Após pagar todas as faturas e contas, sobrarão apenas **R$ {saldo_disponivel_real:,.2f}**.
             """, icon="⚠️")
             
         else:
@@ -88,32 +88,44 @@ class DashboardPage:
         st.divider()
 
         # =====================================================================
-        # 3. OS TRÊS GRANDES NÚMEROS
+        # 3. OS QUATRO GRANDES NÚMEROS (Visualização Detalhada)
         # =====================================================================
         
-        col_cx, col_div, col_res = st.columns(3)
+        # Agora usamos 4 colunas para separar Boleto de Cartão
+        c_saldo, c_contas, c_cartao, c_real = st.columns(4)
 
-        col_cx.metric(
-            label="💰 Saldo Atual (Banco)",
+        # 1. SALDO
+        c_saldo.metric(
+            label="💰 Saldo (Caixa)",
             value=f"R$ {resumo['saldo']:,.2f}",
-            help="O que tem na conta HOJE."
+            help="Dinheiro disponível hoje nas contas."
         )
 
-        # Mostra a Dívida TOTAL aqui, não só a do mês
-        col_div.metric(
-            label="📉 Dívida Total (Tudo Pendente)",
-            value=f"R$ {resumo['divida_total']:,.2f}",
-            delta="-Comprometido",
+        # 2. CONTAS FIXAS
+        c_contas.metric(
+            label="📉 Contas & Boletos",
+            value=f"R$ {resumo['a_pagar_contas']:,.2f}", # Valor só dos boletos/empréstimos
+            delta="-A Pagar",
             delta_color="inverse",
-            help="Soma de TODOS os Boletos, Empréstimos e Contas, independente do vencimento."
+            help="Água, Luz, Internet, Empréstimos e Manutenções."
         )
 
-        col_res.metric(
+        # 3. FATURAS DE CARTÃO (NOVO!)
+        c_cartao.metric(
+            label="💳 Faturas Cartão",
+            value=f"R$ {resumo['a_pagar_cartao']:,.2f}", # Valor só do cartão
+            delta="-Fatura",
+            delta_color="inverse",
+            help="Soma de todas as compras no crédito pendentes."
+        )
+
+        # 4. SALDO REAL
+        c_real.metric(
             label="🏁 SALDO LIVRE REAL",
             value=f"R$ {saldo_disponivel_real:,.2f}",
             delta="Livre" if saldo_disponivel_real > 0 else "FALTA DINHEIRO",
             delta_color="normal" if saldo_disponivel_real > 0 else "inverse",
-            help="Saldo Banco - Dívida Total."
+            help="Saldo - (Contas + Cartões + Dívidas Totais)."
         )
 
         # =====================================================================
@@ -130,6 +142,7 @@ class DashboardPage:
                 df_pizza = pd.DataFrame(dados_pizza)
                 with plt.rc_context({'text.color': 'white', 'axes.labelcolor': 'white'}):
                     fig, ax = plt.subplots(figsize=(4, 4))
+                    # Cores avermelhadas para indicar gastos
                     colors = plt.get_cmap('Reds')(np.linspace(0.4, 0.9, len(df_pizza)))
                     
                     wedges, texts, autotexts = ax.pie(
@@ -162,7 +175,9 @@ class DashboardPage:
 
                 st.dataframe(
                     df_show.style.format({"Valor": "R$ {:,.2f}"}).map(colorir_valor, subset=['Valor']),
-                    width='stretch', height=350, hide_index=True
+                    width=None, # Ajuste automático
+                    height=350, 
+                    hide_index=True
                 )
             else:
                 st.caption("Sem movimentações.")

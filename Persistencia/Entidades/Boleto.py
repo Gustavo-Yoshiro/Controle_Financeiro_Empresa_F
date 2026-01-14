@@ -7,8 +7,13 @@ class Boleto:
     valor: float
     data_vencimento: str
     id_categoria: int
-    codigo_barras: Optional[str] = None
+    
+    codigo_barras: str = ""
     status: str = 'pendente'
-    obs: Optional[str] = None
-    banco_pagamento: Optional[str] = None # <--- NOVO CAMPO
+    obs: str = ""
+    banco_pagamento: str = "" 
+    
+   
+    banco_cartao: Optional[str] = None 
+    
     id_boleto: Optional[int] = None

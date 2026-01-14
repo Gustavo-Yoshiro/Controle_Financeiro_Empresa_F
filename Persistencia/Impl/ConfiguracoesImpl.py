@@ -16,19 +16,35 @@ class ConfiguracaoImpl:
         self.__bd.executar("INSERT INTO aux_banco (nome) VALUES (?)", (nome,))
 
     def atualizar_banco(self, nome_antigo: str, novo_nome: str):
-        # Atualiza a lista auxiliar
+        # 1. Atualiza a lista auxiliar
         self.__bd.executar("UPDATE aux_banco SET nome=? WHERE nome=?", (novo_nome, nome_antigo))
-        # Atualiza o histórico para não quebrar relatórios antigos
+        
+        # 2. Atualiza histórico (Movimentação)
         self.__bd.executar("UPDATE movimentacao SET banco=? WHERE banco=?", (novo_nome, nome_antigo))
+        
+        # 3. Atualiza Boletos (Onde pagou) <-- NOVO
+        self.__bd.executar("UPDATE boleto SET banco_pagamento=? WHERE banco_pagamento=?", (novo_nome, nome_antigo))
+        
+        # 4. Atualiza Cartões (Faturas) <-- NOVO CRUCIAL
+        self.__bd.executar("UPDATE boleto SET banco_cartao=? WHERE banco_cartao=?", (novo_nome, nome_antigo))
 
     def deletar_banco(self, nome: str):
         self.__bd.executar("DELETE FROM aux_banco WHERE nome=?", (nome,))
 
     def banco_esta_em_uso(self, nome: str) -> bool:
-        # Retorna True se tiver alguma transação usando esse banco
-        sql = "SELECT count(*) FROM movimentacao WHERE banco=?"
-        row = self.__bd.executar_query(sql, (nome,), fetchone=True)
-        return row[0] > 0
+        # 1. Verifica Movimentações (Caixa)
+        row = self.__bd.executar_query("SELECT count(*) FROM movimentacao WHERE banco=?", (nome,), fetchone=True)
+        if row[0] > 0: return True
+        
+        # 2. Verifica Boletos Pagos <-- NOVO
+        row = self.__bd.executar_query("SELECT count(*) FROM boleto WHERE banco_pagamento=?", (nome,), fetchone=True)
+        if row[0] > 0: return True
+        
+        # 3. Verifica Faturas de Cartão <-- NOVO CRUCIAL
+        row = self.__bd.executar_query("SELECT count(*) FROM boleto WHERE banco_cartao=?", (nome,), fetchone=True)
+        if row[0] > 0: return True
+
+        return False
 
     # =========================================================================
     # FORMAS DE PAGAMENTO
@@ -48,8 +64,7 @@ class ConfiguracaoImpl:
         self.__bd.executar("DELETE FROM aux_forma_pagamento WHERE nome=?", (nome,))
 
     def forma_esta_em_uso(self, nome: str) -> bool:
-        sql = "SELECT count(*) FROM movimentacao WHERE forma_pagamento=?"
-        row = self.__bd.executar_query(sql, (nome,), fetchone=True)
+        row = self.__bd.executar_query("SELECT count(*) FROM movimentacao WHERE forma_pagamento=?", (nome,), fetchone=True)
         return row[0] > 0
 
     # =========================================================================
@@ -69,6 +84,12 @@ class ConfiguracaoImpl:
         self.__bd.executar("DELETE FROM categoria WHERE id_categoria=?", (id_cat,))
 
     def categoria_esta_em_uso(self, id_cat: int) -> bool:
-        sql = "SELECT count(*) FROM movimentacao WHERE id_categoria=?"
-        row = self.__bd.executar_query(sql, (id_cat,), fetchone=True)
-        return row[0] > 0
+        # 1. Verifica Movimentações
+        row = self.__bd.executar_query("SELECT count(*) FROM movimentacao WHERE id_categoria=?", (id_cat,), fetchone=True)
+        if row[0] > 0: return True
+        
+        # 2. Verifica Boletos Agendados <-- NOVO
+        row = self.__bd.executar_query("SELECT count(*) FROM boleto WHERE id_categoria=?", (id_cat,), fetchone=True)
+        if row[0] > 0: return True
+        
+        return False

@@ -176,7 +176,8 @@ class BancoDeDados:
                     id_categoria INTEGER,
                     status TEXT,
                     obs TEXT,
-                    banco_pagamento TEXT
+                    banco_pagamento TEXT,
+                    banco_cartao TEXT  
                 );
             """)
             cursor.execute("""

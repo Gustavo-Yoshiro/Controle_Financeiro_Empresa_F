@@ -24,7 +24,7 @@ def inicializar_sistema():
     bd.criarBanco()
     
     populador = PopulacaoInicial()
-    populador.popular_categorias_padrao()
+    populador.popular_tudo()
     
     return True 
 
