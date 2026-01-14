@@ -25,36 +25,32 @@ class KitnetsPage:
         self.s_locacao.gerar_cobrancas_mensais()
 
         # 3. Carrega Dados Básicos para os SelectBoxes
-        # Precisamos listar todas para extrair os Blocos na Aba 4
         todas_kitnets_obj = self.s_kitnet.admin_listar_todas()
         
         # Mapeamentos auxiliares
         kits_livres = {f"{k.identificador}-{k.numero}": k.id_kitnet for k in todas_kitnets_obj if k.status == 'LIVRE'}
         todas_kits_map = {f"{k.identificador}-{k.numero}": k.id_kitnet for k in todas_kitnets_obj}
 
-        # 4. Abas
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        # 4. Abas (ADICIONEI A ABA 6 AQUI)
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "Lista Geral", 
             "Novo Contrato", 
             "💰 Receber Aluguel", 
             "💸 Contas (IPTU/Água)",
-            "👤 Inquilinos"
+            "👤 Inquilinos",
+            "🚪 Desocupação / Encerrar" # <--- NOVA ABA
         ])
 
         # --- ABA 1: LISTAGEM GERAL COM FILTROS (Mês/Ano) ---
         with tab1:
-            # --- ÁREA DE FILTROS ---
             with st.expander("🔎 Filtros Avançados", expanded=True):
-                # Dividi em 5 colunas para ficar organizado: Ano | Mês | Status | Inquilino | Kitnet
                 c_ano, c_mes, c_status, c_inq, c_kit = st.columns([1, 1.5, 2, 2, 1.5])
                 
-                # --- Filtro 1: Ano ---
+                # --- Filtros ---
                 ano_atual = date.today().year
-                # Cria lista de anos: 2 anos pra trás até 3 anos pra frente
                 lista_anos = list(range(ano_atual - 2, ano_atual + 4))
                 sel_ano = c_ano.selectbox("Ano", lista_anos, index=lista_anos.index(ano_atual))
 
-                # --- Filtro 2: Mês ---
                 mes_atual = date.today().month
                 mapa_meses = {
                     1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
@@ -63,39 +59,32 @@ class KitnetsPage:
                 lista_meses_str = [f"{k:02d} - {v}" for k, v in mapa_meses.items()]
                 sel_mes_str = c_mes.selectbox("Mês", lista_meses_str, index=mes_atual - 1)
 
-                # Monta a string que o Service entende: "YYYY-MM"
                 mes_num = sel_mes_str.split(" - ")[0] 
                 mes_ref_str = f"{sel_ano}-{mes_num}"
 
-                # --- Filtro 3: Status ---
                 filtro_status = c_status.selectbox(
                     "Situação Financeira", 
                     ["Todos", "✅ Pagos", "🔴 Pendentes/Atrasados", "⚠️ Com Dívida Antiga", "⚪ Livres"]
                 )
 
-                # --- CARREGAMENTO DOS DADOS (Service Inteligente) ---
+                # --- CARREGAMENTO ---
                 dados_tabela = self.s_relatorio.gerar_painel_geral(mes_ref=mes_ref_str)
                 df = pd.DataFrame(dados_tabela)
 
-                # --- Filtro 4: Inquilino (Dinâmico) ---
                 lista_inq = ["Todos"] + list(df[df["Inquilino"] != "---"]["Inquilino"].unique()) if not df.empty else ["Todos"]
                 filtro_inq = c_inq.selectbox("Inquilino", lista_inq)
 
-                # --- Filtro 5: Kitnet (Dinâmico) ---
                 lista_kits = ["Todas"] + list(df["Identificação"].unique()) if not df.empty else ["Todas"]
                 filtro_kit = c_kit.selectbox("Kitnet", lista_kits)
 
-            # --- APLICAÇÃO DOS FILTROS E EXIBIÇÃO ---
+            # --- APLICAÇÃO DOS FILTROS ---
             if not df.empty:
-                # 1. Filtro Inquilino
                 if filtro_inq != "Todos":
                     df = df[df["Inquilino"] == filtro_inq]
                 
-                # 2. Filtro Kitnet
                 if filtro_kit != "Todas":
                     df = df[df["Identificação"] == filtro_kit]
 
-                # 3. Filtro de Status
                 if filtro_status == "✅ Pagos":
                     df = df[df["Situação Mês"].str.contains("PAGO")]
                 elif filtro_status == "🔴 Pendentes/Atrasados":
@@ -110,14 +99,12 @@ class KitnetsPage:
                 elif filtro_status == "⚪ Livres":
                     df = df[df["Status Imóvel"] == "LIVRE"]
 
-                # Header Dinâmico
                 st.markdown(f"#### Resultados de **{mapa_meses[int(mes_num)]}/{sel_ano}**: {len(df)} imóveis")
                 
-                # --- ESTILIZAÇÃO VISUAL ---
                 def colorir_situacao(val):
                     color = ''
                     if isinstance(val, str):
-                        if '⚠️' in val: color = 'color: red; font-weight: bold' # Alerta de dívida antiga
+                        if '⚠️' in val: color = 'color: red; font-weight: bold'
                         elif 'ATRASADO' in val: color = 'color: red'
                         elif 'PAGO' in val: color = 'color: green'
                         elif 'PARCIAL' in val: color = 'color: orange'
@@ -204,7 +191,6 @@ class KitnetsPage:
                 sel_txt = st.selectbox("Selecione a cobrança:", list(map_pendencias.keys()))
                 dados_cobranca = map_pendencias[sel_txt]
                 
-                # Exibe resumo visual
                 st.markdown("---")
                 col_res1, col_res2, col_res3 = st.columns(3)
                 col_res1.metric("Valor Total Esperado", f"R$ {dados_cobranca['valor_total_esperado']:.2f}")
@@ -215,21 +201,16 @@ class KitnetsPage:
                 st.write("#### Detalhes do Pagamento")
                 
                 c1, c2 = st.columns(2)
-                
                 val_sugerido = float(dados_cobranca['valor_restante'])
                 
-                # Input fora do form atualiza a tela assim que você muda o valor
                 valor_recebido = c1.number_input("Valor Recebido Agora (R$)", min_value=0.0, step=10.0, value=val_sugerido)
                 banco_rec = c2.selectbox("Dinheiro entrou em:", bancos_opcoes)
                 
                 obs = st.text_input("Observação (Opcional)")
 
-                # LÓGICA DE DECISÃO (PARCIAL vs ACORDO)
                 eh_acordo = False
-                
                 if valor_recebido < (val_sugerido - 0.05):
                     st.warning(f"⚠️ Atenção: Falta R$ {val_sugerido - valor_recebido:.2f} para quitar.")
-                    
                     tipo_baixa = st.radio(
                         "Como deseja processar essa diferença?",
                         [
@@ -237,7 +218,6 @@ class KitnetsPage:
                             "🔴 Desconto/Acordo (Perdoar o resto e quitar o mês)"
                         ]
                     )
-                    
                     if "Desconto" in tipo_baixa:
                         eh_acordo = True
                 
@@ -261,7 +241,6 @@ class KitnetsPage:
         with tab4:
             st.subheader("💸 Lançar Despesa / Conta")
             
-            # Pega lista de blocos (M1, M2...) baseado nas kitnets carregadas no início da classe
             lista_blocos = sorted(list(set([k.identificador for k in todas_kitnets_obj])))
             
             with st.form("form_despesa_kit"):
@@ -275,7 +254,6 @@ class KitnetsPage:
                 bloco_sel = None
                 prefixo_desc = ""
 
-                # --- LÓGICA DE SELEÇÃO ---
                 if "Individual" in tipo_despesa:
                     st.info("Custo atrelado a uma unidade (Ex: Luz individual, Reparo interno).")
                     if todas_kits_map:
@@ -284,8 +262,7 @@ class KitnetsPage:
                         prefixo_desc = f"Kitnet {nome_k}: "
                     else:
                         st.warning("⚠️ Cadastre kitnets primeiro.")
-                
-                else: # Bloco
+                else:
                     st.info("Custo do Bloco (Ex: Água do M1, Limpeza do M2).")
                     if lista_blocos:
                         bloco_sel = st.selectbox("Selecione o Bloco", lista_blocos)
@@ -294,7 +271,6 @@ class KitnetsPage:
                         st.warning("⚠️ Nenhum bloco encontrado (Verifique cadastros com M1, M2...).")
 
                 st.markdown("---")
-                
                 c1, c2 = st.columns([3, 1])
                 desc = c1.text_input("Descrição", placeholder="Ex: Conta de Água Jan/26")
                 val = c2.number_input("Valor (R$)", min_value=0.01, step=10.0)
@@ -309,19 +285,18 @@ class KitnetsPage:
                         st.error("Digite uma descrição.")
                     else:
                         descricao_final = prefixo_desc + desc
-                        
                         msg = self.s_financeiro.registrar_despesa_imovel(
                             descricao=descricao_final, 
                             valor=val, 
                             id_kitnet=id_kit_sel, 
-                            bloco_alvo=bloco_sel, # Envia o Bloco selecionado
+                            bloco_alvo=bloco_sel,
                             data=str(dt), 
                             banco=banco, 
                             forma=forma
                         )
                         st.success(f"✅ {msg}")
 
-        # --- ABA 5: CADASTRO DE INQUILINOS (COM VALIDAÇÃO) ---
+        # --- ABA 5: CADASTRO DE INQUILINOS ---
         with tab5:
             c_form, c_lista = st.columns([1, 2])
             
@@ -329,9 +304,8 @@ class KitnetsPage:
                 with st.expander("Novo Inquilino", expanded=True):
                     with st.form("form_add_inq"):
                         nome = st.text_input("Nome Completo *")
-                        # Dica: max_chars ajuda a evitar erros de digitação grossos
-                        cpf_input = st.text_input("CPF (Somente números ou com ponto)", max_chars=14)
-                        tel_input = st.text_input("Telefone (DDD + Número)", max_chars=15)
+                        cpf_input = st.text_input("CPF", max_chars=14)
+                        tel_input = st.text_input("Telefone", max_chars=15)
                         email = st.text_input("Email")
                         prof = st.text_input("Profissão")
                         
@@ -342,25 +316,15 @@ class KitnetsPage:
                         
                         if st.form_submit_button("Cadastrar"):
                             erros = []
-
-                            # 1. Validação de Nome
                             if not nome or len(nome.strip()) < 3:
-                                erros.append("O Nome é obrigatório e deve ser completo.")
-
-                            # 2. CPF
+                                erros.append("Nome obrigatório.")
                             if cpf_input and not validar_cpf(cpf_input):
-                                erros.append(f"O CPF '{cpf_input}' é inválido.")
-                            
-                            # 3. Telefone
+                                erros.append(f"CPF inválido.")
                             if tel_input and not validar_telefone(tel_input):
-                                erros.append("Telefone inválido (Use DDD + Número).")
-
-                            # 4. E-MAIL (NOVO)
-                            # Só valida se o campo não estiver vazio
+                                erros.append("Telefone inválido.")
                             if email and not validar_email(email):
-                                erros.append("O formato do E-mail está incorreto.")
+                                erros.append("E-mail incorreto.")
 
-                            # --- DECISÃO FINAL ---
                             if erros:
                                 for e in erros: st.error(f"🔴 {e}")
                             else:
@@ -374,7 +338,6 @@ class KitnetsPage:
                 st.subheader("Pessoas Cadastradas")
                 lista_inq = self.s_inquilino.admin_listar_todos()
                 if lista_inq:
-                    # Formata CPF para exibir bonitinho na tabela (opcional)
                     dados_inq = []
                     for i in lista_inq:
                         dados_inq.append({
@@ -386,3 +349,48 @@ class KitnetsPage:
                     st.dataframe(pd.DataFrame(dados_inq), width="stretch", hide_index=True)
                 else:
                     st.info("Ninguém cadastrado.")
+
+        # --- ABA 6: DESOCUPAÇÃO E ENCERRAMENTO (NOVA) ---
+        with tab6:
+            st.subheader("🚪 Encerrar Contrato e Liberar Kitnet")
+            st.info("Aqui você encerra o contrato atual. A Kitnet voltará a ficar LIVRE. As dívidas passadas continuam registradas no sistema.")
+
+            # Busca contratos ativos
+            # IMPORTANTE: Seu LocacaoService deve ter o método listar_ativas()
+            contratos_ativos = self.s_locacao.listar_ativas() 
+
+            if not contratos_ativos:
+                st.success("Nenhuma kitnet ocupada no momento.")
+            else:
+                for contrato in contratos_ativos:
+                    # Cria um cartão para cada contrato ativo
+                    # O Service deve retornar: id, numero, inquilino_nome, data_inicio, valor, dia_vencimento
+                    label_contrato = f"Kitnet {contrato.get('numero')} - {contrato.get('inquilino_nome')} (Entrou em: {contrato.get('data_inicio')})"
+                    
+                    with st.expander(label_contrato):
+                        c1, c2 = st.columns([1, 1])
+                        c1.write(f"**Valor Atual:** R$ {contrato.get('valor')}")
+                        c1.write(f"**Vencimento todo dia:** {contrato.get('dia_vencimento')}")
+                        
+                        # FORMULÁRIO DE SAÍDA
+                        with c2.form(key=f"form_exit_{contrato.get('id')}"):
+                            st.write("🔴 **Dados do Encerramento**")
+                            data_saida = st.date_input("Data da Entrega das Chaves", value=date.today())
+                            
+                            st.markdown("---")
+                            # Se você desmarcar, não cobra multa (ideal para seu caso de inadimplência)
+                            cobrar_multa = st.checkbox("Cobrar Multa por Quebra de Contrato?", value=False)
+                            valor_multa = st.number_input("Valor da Multa (R$)", value=0.0, step=100.0)
+                            
+                            obs_saida = st.text_area("Motivo / Observação", value="Inquilino desocupou o imóvel. Dívidas anteriores mantidas.")
+
+                            if st.form_submit_button("Confirmar Desocupação 🚪"):
+                                # IMPORTANTE: Seu LocacaoService deve ter o método encerrar_contrato()
+                                res = self.s_locacao.encerrar_contrato(
+                                    id_locacao=contrato.get('id'),
+                                    data_saida=str(data_saida),
+                                    cobrar_multa=cobrar_multa,
+                                    valor_multa=valor_multa
+                                )
+                                st.success(res)
+                                st.rerun()
