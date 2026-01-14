@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .venv/
 financas.db
+.streamlit\secrets.toml

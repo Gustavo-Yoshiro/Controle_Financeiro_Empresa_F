@@ -1,17 +1,25 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
 
-
+# Imports dos Services
 from Service import ConfiguracaoService, FinanceiroService, CategoriaService, RelatorioFinanceiroService
-
 from Service import InquilinoService, KitnetService, LocacaoService, RelatorioKitnetService
-
 from Service import FrotaService, EmpresaService, LogisticaService, RelatorioFrotaService
-
 from Service import PixService, BoletoService, EmprestimoService
 
-
+# Imports das Pages
 from UI.Pages import DashboardPage, FinanceiroPage, DividasPage, KitnetsPage, VeiculosPage, PixPage, ConfiguracoesPage
+
+# --- 🔒 CONFIGURAÇÃO DE SEGURANÇA ---
+# Tenta pegar dos segredos. Se não existir (ex: erro de config), usa uma padrão ou para o código.
+try:
+    SENHA_DO_SISTEMA = st.secrets["senha_sistema"]
+except FileNotFoundError:
+    st.error("Arquivo .streamlit/secrets.toml não encontrado!")
+    st.stop()
+except KeyError:
+    st.error("A chave 'senha_sistema' não foi definida nos segredos!")
+    st.stop()
 
 class AppInterface:
     def __init__(self):
@@ -26,12 +34,12 @@ class AppInterface:
         self.s_financeiro = FinanceiroService() 
         self.s_relatorio_fin = RelatorioFinanceiroService(self.s_categoria)
 
-        # 3. Regras de Negócio (Injetando Financeiro)
+        # 3. Regras de Negócio
         self.s_locacao = LocacaoService(self.s_financeiro)
         self.s_logistica = LogisticaService(self.s_financeiro)
         self.s_frota = FrotaService(self.s_financeiro)
         
-        # 4. Serviços de Leitura (Relatórios)
+        # 4. Relatórios
         self.s_relatorio_kit = RelatorioKitnetService()
         self.s_relatorio_frota = RelatorioFrotaService()
 
@@ -43,26 +51,20 @@ class AppInterface:
         # Configura CSS Global
         self._configurar_estilo()
 
-        # 6. Instancia as Páginas (Injeção de Dependência)
+        # 6. Instancia as Páginas
         self.pages = {
             "Dashboard": DashboardPage(self.s_relatorio_fin, self.s_relatorio_frota, self.s_config),
-            
             "Lançamentos": FinanceiroPage(self.s_financeiro, self.s_categoria, self.s_relatorio_fin, self.s_config),
-            
             "Dívidas & Boletos": DividasPage(self.s_boleto, self.s_emprestimo, self.s_config),
-            
             "Kitnets & Aluguéis": KitnetsPage(
                 self.s_inquilino, self.s_kitnet, self.s_locacao, 
                 self.s_relatorio_kit, self.s_financeiro, self.s_config
             ),
-            
             "Frota & Logística": VeiculosPage(
                 self.s_frota, self.s_empresa, self.s_logistica, 
                 self.s_relatorio_frota, self.s_config
             ),
-            
             "Gerenciador Pix": PixPage(self.s_pix, self.s_config),
-            
             "Configurações": ConfiguracoesPage(
                 self.s_config, self.s_kitnet, self.s_inquilino, self.s_financeiro, 
                 self.s_frota, self.s_pix, self.s_boleto, self.s_emprestimo
@@ -82,29 +84,54 @@ class AppInterface:
         </style>
         """, unsafe_allow_html=True)
 
+    def _renderizar_login(self):
+        """ Renderiza a tela de bloqueio se não estiver logado """
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            with st.container(border=True):
+                st.title("🔒 Acesso Restrito")
+                st.markdown("Sistema de Gestão Família Enterprise")
+                
+                senha = st.text_input("Senha de Acesso", type="password")
+                
+                if st.button("Entrar", type="primary", use_container_width=True):
+                    if senha == SENHA_DO_SISTEMA:
+                        st.session_state["logado"] = True
+                        st.toast("Acesso Liberado!")
+                        st.rerun()
+                    else:
+                        st.error("Senha Incorreta")
+
     def run(self):
-        with st.sidebar:
-            st.title("Gestão Integrada")
+        # 1. VERIFICAÇÃO DE SESSÃO
+        if "logado" not in st.session_state:
+            st.session_state["logado"] = False
+
+        # 2. DECISÃO: LOGIN OU SISTEMA
+        if not st.session_state["logado"]:
+            self._renderizar_login()
+        else:
+            # --- SISTEMA COMPLETO ---
+            with st.sidebar:
+                st.title("Gestão Integrada")
+                
+                selected = option_menu(
+                    menu_title="Menu Principal",
+                    options=list(self.pages.keys()),
+                    icons=["graph-up", "currency-dollar", "receipt", "house", "truck", "qr-code", "gear"], 
+                    menu_icon="cast",
+                    default_index=0,
+                )
+                
+                st.markdown("---")
+                # Botão de Logout
+                if st.button("🔓 Sair / Logout", use_container_width=True):
+                    st.session_state["logado"] = False
+                    st.rerun()
+
+                st.caption("Sistema v2.0 - Família Enterprise")
             
-            selected = option_menu(
-                menu_title="Menu Principal",
-                options=list(self.pages.keys()),
-                icons=[
-                    "graph-up",       # Dashboard
-                    "currency-dollar", # Lançamentos
-                    "receipt",        # Dívidas
-                    "house",          # Kitnets
-                    "truck",          # Frota
-                    "qr-code",        # Pix
-                    "gear"            # Config
-                ], 
-                menu_icon="cast",
-                default_index=0,
-            )
-            
-            st.markdown("---")
-            st.caption("Sistema v2.0 - Família Enterprise")
-        
-        # Renderiza a página escolhida
-        if selected in self.pages:
-            self.pages[selected].render()
+            # Renderiza a página escolhida
+            if selected in self.pages:
+                self.pages[selected].render()

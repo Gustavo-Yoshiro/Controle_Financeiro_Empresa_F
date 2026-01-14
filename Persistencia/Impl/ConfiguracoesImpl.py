@@ -22,10 +22,10 @@ class ConfiguracaoImpl:
         # 2. Atualiza histórico (Movimentação)
         self.__bd.executar("UPDATE movimentacao SET banco=? WHERE banco=?", (novo_nome, nome_antigo))
         
-        # 3. Atualiza Boletos (Onde pagou) <-- NOVO
+        # 3. Atualiza Boletos (Onde pagou) 
         self.__bd.executar("UPDATE boleto SET banco_pagamento=? WHERE banco_pagamento=?", (novo_nome, nome_antigo))
         
-        # 4. Atualiza Cartões (Faturas) <-- NOVO CRUCIAL
+        # 4. Atualiza Cartões (Faturas) 
         self.__bd.executar("UPDATE boleto SET banco_cartao=? WHERE banco_cartao=?", (novo_nome, nome_antigo))
 
     def deletar_banco(self, nome: str):
@@ -36,11 +36,11 @@ class ConfiguracaoImpl:
         row = self.__bd.executar_query("SELECT count(*) FROM movimentacao WHERE banco=?", (nome,), fetchone=True)
         if row[0] > 0: return True
         
-        # 2. Verifica Boletos Pagos <-- NOVO
+        # 2. Verifica Boletos Pagos
         row = self.__bd.executar_query("SELECT count(*) FROM boleto WHERE banco_pagamento=?", (nome,), fetchone=True)
         if row[0] > 0: return True
         
-        # 3. Verifica Faturas de Cartão <-- NOVO CRUCIAL
+        # 3. Verifica Faturas de Cartão 
         row = self.__bd.executar_query("SELECT count(*) FROM boleto WHERE banco_cartao=?", (nome,), fetchone=True)
         if row[0] > 0: return True
 
@@ -88,7 +88,7 @@ class ConfiguracaoImpl:
         row = self.__bd.executar_query("SELECT count(*) FROM movimentacao WHERE id_categoria=?", (id_cat,), fetchone=True)
         if row[0] > 0: return True
         
-        # 2. Verifica Boletos Agendados <-- NOVO
+        # 2. Verifica Boletos Agendados 
         row = self.__bd.executar_query("SELECT count(*) FROM boleto WHERE id_categoria=?", (id_cat,), fetchone=True)
         if row[0] > 0: return True
         
