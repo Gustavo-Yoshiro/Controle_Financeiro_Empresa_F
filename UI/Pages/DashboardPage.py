@@ -56,105 +56,178 @@ class DashboardPage:
         # 2. CÁLCULO DA "VERDADE"
         # =====================================================================
         
-        # Busca dados detalhados (agora vem separado cartão e boletos)
-        resumo = self.s_relatorio.get_resumo_periodo(str(dt_ini), str(dt_fim), ver_acumulado=acumular)
+        # Busca 1: Dados do Período Selecionado (Para Saldo de Caixa e Gráficos)
+        resumo_periodo = self.s_relatorio.get_resumo_periodo(str(dt_ini), str(dt_fim), ver_acumulado=acumular)
 
-        # A conta: Saldo - Tudo que devo (Boletos + Cartão + Empréstimos)
-        # O campo 'divida_total' do service já soma tudo isso.
-        saldo_disponivel_real = resumo['saldo'] - resumo['divida_total']
+        # Busca 2: Dados TOTAIS FUTUROS (Para Dívida Real e Cards de Cartão)
+        dt_futuro = date(date.today().year + 10, 12, 31)
+        resumo_total = self.s_relatorio.get_resumo_periodo("2000-01-01", str(dt_futuro), ver_acumulado=True)
+
+        # Para o Saldo em Conta, usamos o do período (ou acumulado até hoje)
+        val_saldo = resumo_periodo.get('saldo', 0.0)
+        
+        # Para as Dívidas, usamos o TOTAL (incluindo parcelas de 2026, 2027...)
+        val_contas_total = resumo_total.get('a_pagar_contas', 0.0)
+        val_cartao_total = resumo_total.get('a_pagar_cartao', 0.0)
+        
+        val_divida_total = resumo_total.get('divida_total', val_contas_total + val_cartao_total)
+        saldo_disponivel_real = val_saldo - val_divida_total
 
         st.divider()
 
         # Semáforo da Realidade
         if saldo_disponivel_real < 0:
-            st.error(f"""
+            msg_erro = f"""
             ### 🚨 SITUAÇÃO CRÍTICA
             O dinheiro na conta **JÁ TEM DONO**.
             \n**Faltam R$ {abs(saldo_disponivel_real):,.2f} para cobrir Contas, Cartões e Empréstimos.**
-            """, icon="🛑")
+            """
+            st.error(msg_erro, icon="🛑")
             
         elif saldo_disponivel_real < 1000: 
-            st.warning(f"""
+            msg_alerta = f"""
             ### ⚠️ ALERTA: MARGEM PEQUENA
             Após pagar todas as faturas e contas, sobrarão apenas **R$ {saldo_disponivel_real:,.2f}**.
-            """, icon="⚠️")
+            """
+            st.warning(msg_alerta, icon="⚠️")
             
         else:
-            st.success(f"""
+            msg_sucesso = f"""
             ### ✅ SAÚDE FINANCEIRA OK
             Temos **R$ {saldo_disponivel_real:,.2f}** livres após projetar todas as dívidas.
-            """, icon="✅")
+            """
+            st.success(msg_sucesso, icon="✅")
 
         st.divider()
 
         # =====================================================================
-        # 3. OS QUATRO GRANDES NÚMEROS (Visualização Detalhada)
+        # 3. OS QUATRO GRANDES NÚMEROS
         # =====================================================================
         
-        # Agora usamos 4 colunas para separar Boleto de Cartão
         c_saldo, c_contas, c_cartao, c_real = st.columns(4)
 
-        # 1. SALDO
         c_saldo.metric(
             label="💰 Saldo (Caixa)",
-            value=f"R$ {resumo['saldo']:,.2f}",
+            value=f"R$ {val_saldo:,.2f}",
             help="Dinheiro disponível hoje nas contas."
         )
 
-        # 2. CONTAS FIXAS
         c_contas.metric(
             label="📉 Contas & Boletos",
-            value=f"R$ {resumo['a_pagar_contas']:,.2f}", # Valor só dos boletos/empréstimos
+            value=f"R$ {val_contas_total:,.2f}",
             delta="-A Pagar",
             delta_color="inverse",
-            help="Água, Luz, Internet, Empréstimos e Manutenções."
+            help="Total de contas e empréstimos pendentes (inclui futuros)."
         )
 
-        # 3. FATURAS DE CARTÃO (NOVO!)
         c_cartao.metric(
             label="💳 Faturas Cartão",
-            value=f"R$ {resumo['a_pagar_cartao']:,.2f}", # Valor só do cartão
-            delta="-Fatura",
+            value=f"R$ {val_cartao_total:,.2f}",
+            delta="-Fatura Total",
             delta_color="inverse",
-            help="Soma de todas as compras no crédito pendentes."
+            help="Soma de todas as faturas e parcelas futuras em aberto."
         )
 
-        # 4. SALDO REAL
         c_real.metric(
             label="🏁 SALDO LIVRE REAL",
             value=f"R$ {saldo_disponivel_real:,.2f}",
             delta="Livre" if saldo_disponivel_real > 0 else "FALTA DINHEIRO",
             delta_color="normal" if saldo_disponivel_real > 0 else "inverse",
-            help="Saldo - (Contas + Cartões + Dívidas Totais)."
+            help="Saldo - (Todas as Dívidas Futuras)."
         )
 
         # =====================================================================
-        # 4. GRÁFICO E TABELA
+        # 4. GRÁFICOS (AGORA COM ABAS) E TABELA
         # =====================================================================
         
         c_graf, c_tab = st.columns([1, 1.5])
 
         with c_graf:
-            st.markdown("##### 🍰 Gastos do Período")
-            dados_pizza = self.s_relatorio.get_gastos_periodo_flex(str(dt_ini), str(dt_fim))
+            # Abas para alternar entre "Passado" (Gastos) e "Futuro" (Dívidas)
+            tab_gastos, tab_dividas = st.tabs(["🍰 Gastos Realizados", "📉 Dívidas Futuras"])
             
-            if dados_pizza:
-                df_pizza = pd.DataFrame(dados_pizza)
-                with plt.rc_context({'text.color': 'white', 'axes.labelcolor': 'white'}):
-                    fig, ax = plt.subplots(figsize=(4, 4))
-                    # Cores avermelhadas para indicar gastos
-                    colors = plt.get_cmap('Reds')(np.linspace(0.4, 0.9, len(df_pizza)))
+            # --- GRÁFICO 1: GASTOS (CAIXA) ---
+            with tab_gastos:
+                dados_pizza = self.s_relatorio.get_gastos_periodo_flex(str(dt_ini), str(dt_fim))
+                
+                if dados_pizza:
+                    df_pizza = pd.DataFrame(dados_pizza)
+                    with plt.rc_context({'text.color': 'white', 'axes.labelcolor': 'white'}):
+                        fig, ax = plt.subplots(figsize=(4, 4))
+                        colors = plt.get_cmap('Reds')(np.linspace(0.4, 0.9, len(df_pizza)))
+                        
+                        wedges, texts, autotexts = ax.pie(
+                            df_pizza['valor'], labels=df_pizza['categoria'], autopct='%1.0f%%', 
+                            startangle=90, colors=colors, textprops={'fontsize': 10}
+                        )
+                        for text in texts: text.set_color('white')
+                        for autotext in autotexts: autotext.set_color('white')
+                        fig.patch.set_alpha(0.0); ax.patch.set_alpha(0.0)
+                        st.pyplot(fig)
+                else:
+                    st.info("Sem gastos registrados.")
+
+            # --- GRÁFICO 2: DÍVIDAS (FUTURO) ---
+            with tab_dividas:
+                total_dividas = val_cartao_total + val_contas_total
+                
+                if total_dividas > 0:
+                    # 1. Gráfico Macro (Cartão vs Boleto)
+                    df_dividas = pd.DataFrame([
+                        {"Tipo": "Fatura Cartão", "Valor": val_cartao_total},
+                        {"Tipo": "Boletos/Contas", "Valor": val_contas_total}
+                    ])
+                    df_dividas = df_dividas[df_dividas["Valor"] > 0]
                     
-                    wedges, texts, autotexts = ax.pie(
-                        df_pizza['valor'], labels=df_pizza['categoria'], autopct='%1.0f%%', 
-                        startangle=90, colors=colors, textprops={'fontsize': 10}
-                    )
-                    for text in texts: text.set_color('white')
-                    for autotext in autotexts: autotext.set_color('white')
-                    fig.patch.set_alpha(0.0); ax.patch.set_alpha(0.0)
-                    st.pyplot(fig)
-            else:
-                st.info("Sem gastos registrados.")
+                    st.caption("Visão Geral")
+                    with plt.rc_context({'text.color': 'white', 'axes.labelcolor': 'white'}):
+                        fig2, ax2 = plt.subplots(figsize=(3, 3))
+                        colors_div = ['#8A2BE2', '#CD5C5C'] 
+                        wedges, texts, autotexts = ax2.pie(
+                            df_dividas['Valor'], labels=df_dividas['Tipo'], autopct='%1.0f%%', 
+                            startangle=90, colors=colors_div, textprops={'fontsize': 8}
+                        )
+                        for text in texts: text.set_color('white')
+                        for autotext in autotexts: autotext.set_color('white')
+                        fig2.patch.set_alpha(0.0); ax2.patch.set_alpha(0.0)
+                        st.pyplot(fig2)
+
+                    # 2. NOVO: Gráfico Detalhado por Categoria
+                    # Busca os boletos pendentes diretamente (usando o acesso ao DAO disponível)
+                    if hasattr(self.s_relatorio, 'dao_boleto'):
+                        todos_pendentes = [b for b in self.s_relatorio.dao_boleto.listar_todos() if b.status == 'pendente']
+                        
+                        if todos_pendentes:
+                            st.divider()
+                            st.caption("Por Categoria (Onde vai o dinheiro)")
+                            
+                            cats = self.cfg.listar_categorias()
+                            mapa_cats = {c['id']: c['nome'] for c in cats}
+                            
+                            dados_cat = {}
+                            for b in todos_pendentes:
+                                nome_cat = mapa_cats.get(b.id_categoria, "Outros")
+                                dados_cat[nome_cat] = dados_cat.get(nome_cat, 0.0) + b.valor
+                            
+                            df_cat_futuro = pd.DataFrame(list(dados_cat.items()), columns=['Categoria', 'Valor'])
+                            df_cat_futuro = df_cat_futuro[df_cat_futuro['Valor'] > 0].sort_values('Valor', ascending=False)
+                            
+                            with plt.rc_context({'text.color': 'white', 'axes.labelcolor': 'white'}):
+                                fig3, ax3 = plt.subplots(figsize=(4, 4))
+                                colors_cat = plt.get_cmap('Set3')(np.linspace(0, 1, len(df_cat_futuro)))
+                                
+                                wedges, texts, autotexts = ax3.pie(
+                                    df_cat_futuro['Valor'], labels=df_cat_futuro['Categoria'], autopct='%1.0f%%', 
+                                    startangle=90, colors=colors_cat, textprops={'fontsize': 10}
+                                )
+                                for text in texts: text.set_color('white')
+                                for autotext in autotexts: autotext.set_color('white')
+                                fig3.patch.set_alpha(0.0); ax3.patch.set_alpha(0.0)
+                                st.pyplot(fig3)
+
+                    st.caption(f"Total Futuro: R$ {total_dividas:,.2f}")
+                else:
+                    st.success("Tudo pago! Sem dívidas futuras.")
 
         with c_tab:
             st.markdown("##### 🧾 Extrato do Período")
@@ -167,15 +240,19 @@ class DashboardPage:
 
             if dados_extrato:
                 df_show = pd.DataFrame(dados_extrato)
-                df_show = df_show[['data', 'descricao', 'valor', 'banco']]
-                df_show.columns = ['Data', 'Descrição', 'Valor', 'Banco']
+                colunas_desejadas = ['data', 'descricao', 'valor', 'banco']
+                colunas_existentes = [c for c in colunas_desejadas if c in df_show.columns]
+                
+                df_show = df_show[colunas_existentes]
+                df_show.columns = [c.capitalize() for c in colunas_existentes]
 
                 def colorir_valor(val):
-                    return f'color: {"#ff4b4b" if val < 0 else "#3dd56d"}; font-weight: bold'
+                    cor = "#ff4b4b" if val < 0 else "#3dd56d"
+                    return f"color: {cor}; font-weight: bold"
 
                 st.dataframe(
                     df_show.style.format({"Valor": "R$ {:,.2f}"}).map(colorir_valor, subset=['Valor']),
-                    width=None, # Ajuste automático
+                    width='stretch',
                     height=350, 
                     hide_index=True
                 )

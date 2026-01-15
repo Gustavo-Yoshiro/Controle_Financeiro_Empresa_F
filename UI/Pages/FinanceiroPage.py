@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, datetime
 
 class FinanceiroPage:
     def __init__(self, financeiro_service, categoria_service, relatorio_service, config_service):
@@ -52,7 +52,8 @@ class FinanceiroPage:
         # --- Form Receita ---
         with c1:
             with st.expander("➕ Nova Receita", expanded=False):
-                with st.form("form_rec"):
+                # clear_on_submit=True limpa o formulário após o sucesso
+                with st.form("form_rec", clear_on_submit=True):
                     desc = st.text_input("Descrição (Ex: Freelance, Venda)")
                     val = st.number_input("Valor (R$)", min_value=0.01)
                     
@@ -65,14 +66,11 @@ class FinanceiroPage:
                     banco = c_b.selectbox("Destino", bancos_opcoes, key="bk_rec")
                     forma = c_f.selectbox("Forma", formas_opcoes, key="fm_rec")
                     
-                    # Nota: Nos botões, mantemos use_container_width=True pois geralmente
-                    # a mudança para 'stretch' afeta principalmente st.dataframe/st.data_editor.
-                    # Se der erro aqui também, mude para width='stretch'.
-                    if st.form_submit_button("Salvar Receita", use_container_width=True):
+                    if st.form_submit_button("Salvar Receita", width='stretch'):
                         if not desc:
                             st.warning("Digite uma descrição.")
                         else:
-                            msg = self.s_financeiro.registrar_receita_manual(
+                            res = self.s_financeiro.registrar_receita_manual(
                                 descricao=desc, 
                                 valor=val, 
                                 id_categoria=cat_id, 
@@ -80,13 +78,18 @@ class FinanceiroPage:
                                 banco=banco, 
                                 forma=forma
                             )
-                            st.success(msg)
-                            st.rerun()
+                            if res.get("sucesso"):
+                                st.success(res["msg"])
+                            else:
+                                st.error(res["msg"])
 
         # --- Form Despesa ---
         with c2:
             with st.expander("➖ Nova Despesa", expanded=False):
-                with st.form("form_des"):
+                # AVISO IMPORTANTE: Direciona o usuário para a tela correta
+                st.info("ℹ️ Para compras parceladas ou no **Crédito**, utilize a página **Dívidas & Boletos**.")
+                
+                with st.form("form_des", clear_on_submit=True):
                     desc = st.text_input("Descrição (Ex: Almoço, Uber)")
                     val = st.number_input("Valor (R$)", min_value=0.01)
                     
@@ -97,22 +100,34 @@ class FinanceiroPage:
                     
                     c_b, c_f = st.columns(2)
                     banco = c_b.selectbox("Origem", bancos_opcoes, key="bk_des")
-                    forma = c_f.selectbox("Forma", formas_opcoes, key="fm_des")
                     
-                    if st.form_submit_button("Salvar Despesa", use_container_width=True):
+                    # FILTRO DE SEGURANÇA:
+                    # Remove "Crédito" das opções para impedir lançamento errado no fluxo de caixa
+                    formas_validas = [f for f in formas_opcoes if "Crédito" not in f and "Credito" not in f]
+                    if not formas_validas: formas_validas = formas_opcoes # Fallback caso sobre nada
+                    
+                    forma = c_f.selectbox("Forma", formas_validas, key="fm_des")
+                    
+                    # --- NOVO: CHECKBOX PERMITIR NEGATIVO ---
+                    permitir = st.checkbox("Permitir Ficar Negativo?", value=False, help="Marque para autorizar o lançamento mesmo sem saldo suficiente em caixa.")
+                    
+                    if st.form_submit_button("Salvar Despesa", width='stretch'):
                         if not desc:
                             st.warning("Digite uma descrição.")
                         else:
-                            msg = self.s_financeiro.registrar_gasto_manual(
+                            res = self.s_financeiro.registrar_gasto_manual(
                                 descricao=desc, 
                                 valor=val, 
                                 id_categoria=cat_id, 
                                 data_gasto=str(dt), 
                                 banco=banco, 
-                                forma=forma
+                                forma=forma,
+                                permitir_negativo=permitir # <--- Passando o parâmetro
                             )
-                            st.success(msg)
-                            st.rerun()
+                            if res.get("sucesso"):
+                                st.success(res["msg"])
+                            else:
+                                st.error(res["msg"])
 
         # =====================================================================
         # 4. EXTRATO DETALHADO
@@ -132,13 +147,11 @@ class FinanceiroPage:
                 else:
                     return ['background-color: rgba(255, 99, 71, 0.1)'] * len(row)
 
-            # --- CORREÇÃO AQUI ---
-            # Substituído use_container_width=True por width="stretch"
             st.dataframe(
                 df[['data', 'descricao', 'categoria', 'valor', 'banco', 'forma', 'tipo']]
                 .style.apply(colorir_tipo, axis=1)
-                .format({"valor": "R$ {:.2f}"}), 
-                width="stretch",  # <--- Nova sintaxe
+                .format({"valor": "R$ {:,.2f}"}), 
+                width='stretch',
                 height=500,
                 hide_index=True
             )

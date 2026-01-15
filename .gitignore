@@ -3,3 +3,4 @@ __pycache__/
 .venv/
 financas.db
 .streamlit\secrets.toml
+uploads_contratos

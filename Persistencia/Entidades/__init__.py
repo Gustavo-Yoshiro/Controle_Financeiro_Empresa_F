@@ -16,3 +16,4 @@ from .Movimentacao import Movimentacao
 from .Boleto import Boleto
 from .Pix import Pix
 from .Emprestimo import Emprestimo
+from .Credito import CartaoCredito

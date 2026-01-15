@@ -1,9 +1,8 @@
 from typing import List, Dict
 from datetime import datetime, date
 import calendar
-
-from Persistencia.Impl import MovimentacaoImpl, BoletoImpl, DividaVeiculoImpl, PagamentoAluguelImpl, PagamentoAlocacaoImpl, EmprestimoImpl
-from Service import CategoriaService 
+from Persistencia.Impl import MovimentacaoImpl, DividaVeiculoImpl, PagamentoAluguelImpl, PagamentoAlocacaoImpl, EmprestimoImpl, BoletoImpl
+from Service.CategoriaService import CategoriaService 
 
 class RelatorioFinanceiroService:
     def __init__(self, categoria_service: CategoriaService = None):
@@ -18,11 +17,13 @@ class RelatorioFinanceiroService:
 
     def get_resumo_periodo(self, data_inicio_str: str, data_fim_str: str, ver_acumulado: bool = True) -> Dict[str, float]:
         """
-        Calcula os KPIs financeiros separando o que é Boleto Comum do que é Fatura de Cartão.
+        Calcula os KPIs financeiros.
+        A mágica acontece aqui: ele separa automaticamente o que é Cartão do que é Boleto
+        apenas verificando se o campo 'banco_cartao' existe.
         """
         
         # ==========================================
-        # 1. CAIXA REALIZADO (O que aconteceu de verdade)
+        # 1. CAIXA REALIZADO (Passado/Presente)
         # ==========================================
         movs = self.dao.listar_periodo(data_inicio_str, data_fim_str)
         receitas_caixa = sum(m.valor for m in movs if m.valor > 0)
@@ -30,33 +31,34 @@ class RelatorioFinanceiroService:
         saldo_caixa = receitas_caixa + despesas_caixa
 
         # ==========================================
-        # 2. PREVISÃO / DÍVIDAS (O Futuro)
+        # 2. PREVISÃO / DÍVIDAS (Futuro)
         # ==========================================
         
-        # Variáveis separadas para os KPIs
-        a_pagar_boletos = 0.0      # Contas de consumo (Água, Luz, Internet)
-        a_pagar_cartao = 0.0       # Faturas de cartão acumuladas
-        divida_total_geral = 0.0   # TUDO (incluindo empréstimos) para o saldo real
+        a_pagar_boletos = 0.0      # Contas de consumo (Água, Luz)
+        a_pagar_cartao = 0.0       # Faturas de cartão
+        divida_total_geral = 0.0   # Tudo somado
         
-        # --- 2.1 Boletos e Cartões ---
+        # --- 2.1 Boletos e Cartões (Tudo vem do BoletoImpl) ---
         for b in self.dao_boleto.listar_todos():
             if b.status == 'pendente':
-                # Sempre soma na Dívida Total (Realidade)
+                # Soma na dívida total independente da data (visão macro)
                 divida_total_geral += b.valor
                 
-                # Verifica se entra no filtro de data (Fluxo de Caixa)
+                # Verifica filtro de data para o Fluxo de Caixa mensal
                 entra = False
                 if ver_acumulado:
+                    # Se acumular: pega tudo do passado até o fim do mês selecionado
                     if b.data_vencimento and b.data_vencimento <= data_fim_str: entra = True
                 else:
+                    # Se não acumular: pega só o que vence neste mês específico
                     if b.data_vencimento and data_inicio_str <= b.data_vencimento <= data_fim_str: entra = True
                 
                 if entra:
-                    # AQUI ESTÁ A MUDANÇA: Separação Inteligente
+                    # LÓGICA MANTIDA E PERFEITA:
                     if b.banco_cartao: 
-                        a_pagar_cartao += b.valor
+                        a_pagar_cartao += b.valor # Vai pro KPI Roxo (Cartão)
                     else:
-                        a_pagar_boletos += b.valor
+                        a_pagar_boletos += b.valor # Vai pro KPI Vermelho (Contas)
 
         # --- 2.2 Dívidas de Veículo (Conta como Boleto) ---
         for d in self.dao_divida_veiculo.listar_todas():
@@ -71,20 +73,21 @@ class RelatorioFinanceiroService:
                 
                 if entra: a_pagar_boletos += d.valor
 
-        # --- 2.3 Empréstimos (Peso Morto) ---
+        # --- 2.3 Empréstimos ---
         for e in self.dao_emprestimo.listar_todos():
             if e.status == 'ativo':
                 restante = e.valor_total - e.valor_pago
                 if restante > 0:
                     divida_total_geral += restante
-                    # Empréstimos consideramos como prioridade máxima (entra em boletos)
+                    # Empréstimos impactam o fluxo de boletos
                     a_pagar_boletos += restante
 
-        # --- 2.4 A Receber ---
+        # --- 2.4 A Receber (Aluguéis e Alocações) ---
         a_receber_periodo = 0.0
         mes_ini_ref = data_inicio_str[:7]
         mes_fim_ref = data_fim_str[:7]
 
+        # Aluguéis Kitnet
         for a in self.dao_aluguel.listar_todos():
             if a.status in ['pendente', 'atrasado', 'parcial']:
                 entra = False
@@ -94,6 +97,7 @@ class RelatorioFinanceiroService:
                     if mes_ini_ref <= a.mes_referencia <= mes_fim_ref: entra = True
                 if entra: a_receber_periodo += (a.valor_esperado - a.valor_pago)
 
+        # Alocações Veículos
         for l in self.dao_alocacao.listar_todos():
             if l.status in ['pendente', 'atrasado', 'parcial']:
                 entra = False
@@ -103,7 +107,7 @@ class RelatorioFinanceiroService:
                     if mes_ini_ref <= l.mes_referencia <= mes_fim_ref: entra = True
                 if entra: a_receber_periodo += (l.valor_esperado - l.valor_pago)
 
-        # TOTAL COMBINADO PARA O FLUXO
+        # TOTAL COMBINADO
         total_a_pagar_periodo = a_pagar_boletos + a_pagar_cartao
 
         return {
@@ -111,18 +115,17 @@ class RelatorioFinanceiroService:
             "despesas": despesas_caixa,
             "saldo": saldo_caixa,
             
-            # KPIs DETALHADOS
+            # KPIs DETALHADOS PARA O DASHBOARD
             "a_pagar_total": total_a_pagar_periodo, 
-            "a_pagar_contas": a_pagar_boletos,      # Vai para o card Vermelho
-            "a_pagar_cartao": a_pagar_cartao,       # Vai para o card Roxo/Laranja
+            "a_pagar_contas": a_pagar_boletos,      
+            "a_pagar_cartao": a_pagar_cartao,       
             
-            "divida_total": divida_total_geral,     # Vai para o cálculo de Saldo Real
+            "divida_total": divida_total_geral,     
             
             "a_receber": a_receber_periodo,
             "previsao_final": saldo_caixa + a_receber_periodo - total_a_pagar_periodo
         }
 
-    # ... (O resto do arquivo: gerar_extrato, get_gastos_periodo_flex mantêm-se iguais) ...
     def gerar_extrato(self, data_inicio: str, data_fim: str, 
                       filtro_bancos: List[str] = None, 
                       filtro_formas: List[str] = None,

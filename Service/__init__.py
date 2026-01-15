@@ -3,6 +3,7 @@ from .EmprestimoService import EmprestimoService
 from .FinanceiroService import FinanceiroService
 from .PixService import PixService
 from .RelatorioFinanceiroService import RelatorioFinanceiroService
+from .CreditoService import CreditoService
 
 from.CategoriaService import CategoriaService
 from .ConfiguracaoService import ConfiguracaoService

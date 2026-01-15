@@ -191,6 +191,17 @@ class BancoDeDados:
                     favorito INTEGER DEFAULT 0
                 );
             """)
+            
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cartao_credito (
+                    id_cartao INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nome TEXT NOT NULL UNIQUE,   -- Ex: Nubank, Inter
+                    dia_fechamento INTEGER NOT NULL, -- Ex: 04
+                    dia_vencimento INTEGER NOT NULL, -- Ex: 11
+                    limite REAL DEFAULT 0.0,
+                    bandeira TEXT
+                );
+            """)
 
             # 5. MOVIMENTAÇÃO (CENTRAL) 
             cursor.execute("""

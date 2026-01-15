@@ -3,12 +3,14 @@ import pandas as pd
 from datetime import date
 
 class VeiculosPage:
-    def __init__(self, frota_service, empresa_service, logistica_service, relatorio_service, config_service):
+    # Adicionado boleto_service nos parâmetros
+    def __init__(self, frota_service, empresa_service, logistica_service, relatorio_service, config_service, boleto_service):
         self.s_frota = frota_service       # Cadastro/Manutenção de Veículos
         self.s_empresa = empresa_service   # Cadastro de Empresas
         self.s_logistica = logistica_service # Lógica de Contrato e Pagamento
         self.s_relatorio = relatorio_service # Relatórios Inteligentes
         self.cfg = config_service          # Configurações gerais
+        self.s_boleto = boleto_service     # <--- Novo: Para lançar boletos de manutenção
 
     def render(self):
         st.title("🚚 Gestão de Frota")
@@ -41,7 +43,7 @@ class VeiculosPage:
             "🛠️ Manutenção"
         ])
 
-        # --- ABA 1: PAINEL INTELIGENTE (IGUAL KITNETS) ---
+        # --- ABA 1: PAINEL INTELIGENTE ---
         with tab1:
             with st.expander("🔎 Filtros de Período", expanded=True):
                 c_ano, c_mes = st.columns([1, 1])
@@ -62,7 +64,7 @@ class VeiculosPage:
 
             # Cadastrar Novo Veículo (Botão Rápido)
             with st.popover("➕ Cadastrar Veículo"):
-                with st.form("fv"):
+                with st.form("fv", clear_on_submit=True):
                     m = st.text_input("Modelo (Ex: Fiat Uno)")
                     p = st.text_input("Placa")
                     ano = st.number_input("Ano", min_value=1990, value=2024)
@@ -106,7 +108,7 @@ class VeiculosPage:
             c_form, c_list = st.columns([1, 2])
             with c_form:
                 st.subheader("Nova Empresa")
-                with st.form("f_emp"):
+                with st.form("f_emp", clear_on_submit=True):
                     raz = st.text_input("Razão Social")
                     cnpj = st.text_input("CNPJ")
                     tel = st.text_input("Telefone")
@@ -122,7 +124,6 @@ class VeiculosPage:
                 st.subheader("Clientes Cadastrados")
                 lista_emp = self.s_empresa.admin_listar_todas()
                 if lista_emp:
-                    # Converte para DataFrame para ficar bonito
                     df_emp = pd.DataFrame([{"Empresa": e.razao_social, "CNPJ": e.cnpj, "Tel": e.telefone} for e in lista_emp])
                     st.dataframe(df_emp, width='stretch', hide_index=True)
                 else:
@@ -132,14 +133,11 @@ class VeiculosPage:
         with tab3:
             st.subheader("Alocar Veículo")
             
-            # Mapas para Selectbox
             empresas_map = self.s_empresa.listar_para_select() 
-            
-            # Busca apenas veículos ativos (disponíveis)
             frota_completa = self.s_frota.admin_listar_todos()
             veiculos_map = {f"{v.modelo} - {v.placa}": v.id_veiculo for v in frota_completa if v.status == 'ativo'}
 
-            with st.form("f_con_alo"):
+            with st.form("f_con_alo", clear_on_submit=True):
                 if not empresas_map:
                     st.warning("Cadastre Empresas na aba anterior.")
                     emp_sel = None
@@ -163,34 +161,25 @@ class VeiculosPage:
                                 emp_sel, veic_sel, val, int(dia), str(dt_ini)
                             )
                             st.success(msg)
-                            st.balloons()
                             st.rerun()
 
         # --- ABA 4: RECEBER (COM LÓGICA DINÂMICA) ---
         with tab4:
             st.subheader("Faturas de Alocação Pendentes")
             
-            # 1. Pega a lista de pendências do Service (já calculada)
-            # Retorna lista de dicts: [{'label_combo': '...', 'id_pagamento': 1, 'valor_restante': 500}, ...]
             lista_pendencias = self.s_logistica.listar_faturas_pendentes()
             
             if not lista_pendencias:
                 st.success("Tudo recebido! Nenhuma alocação pendente. 🎉")
             else:
-                # Cria mapa para o selectbox
                 mapa_faturas = {item['label_combo']: item for item in lista_pendencias}
-                
-                # Selectbox fora do form para atualizar a tela
                 sel_fatura = st.selectbox("Selecione a Fatura:", list(mapa_faturas.keys()))
-                
-                # Pega os dados da seleção
                 dados_fatura = mapa_faturas[sel_fatura]
                 val_sugerido = float(dados_fatura['valor_restante'])
                 
                 st.divider()
                 
                 c1, c2 = st.columns(2)
-                # Input já vem preenchido com o que falta
                 val_recebido = c1.number_input("Valor a Receber Agora (R$)", min_value=0.0, value=val_sugerido)
                 banco_rec = c2.selectbox("Entrou em:", bancos_opcoes)
                 obs = st.text_input("Observação (Opcional)")
@@ -205,33 +194,49 @@ class VeiculosPage:
                     st.success(msg)
                     st.rerun()
 
-        # --- ABA 5: DESPESAS ---
+        # --- ABA 5: DESPESAS (MANUTENÇÃO) ---
         with tab5:
             st.subheader("Lançar Manutenção/Gasto")
             
-            # Lista todos os veículos (Select Simples)
             frota_dicts = self.s_relatorio.listar_frota_simples()
             
             if not frota_dicts:
                 st.warning("Sem veículos.")
             else:
-                # Monta dict {Label: ID}
                 all_veic_map = {f"{v['modelo']} - {v['placa']}": v['id'] for v in frota_dicts}
 
-                with st.form("fg"):
+                with st.form("fg", clear_on_submit=True):
                     v_nome = st.selectbox("Veículo", list(all_veic_map.keys()))
                     id_v = all_veic_map[v_nome]
                     
-                    desc = st.text_input("Descrição (Ex: Troca de Óleo, Pneu)")
+                    desc = st.text_input("Descrição (Ex: Troca de Óleo, Pneu, IPVA)")
                     
                     c1, c2 = st.columns(2)
                     val = c1.number_input("Valor (R$)", min_value=0.01)
-                    dt = c2.date_input("Data Pagamento", value=date.today())
                     
+                    # Seletor de forma PRIMEIRO para decidir a lógica do botão
+                    # Se for Boleto, a data é Vencimento. Se for outro, é Pagamento.
                     c3, c4 = st.columns(2)
-                    banco = c3.selectbox("Pago via:", bancos_opcoes)
                     forma = c4.selectbox("Forma:", formas_opcoes)
                     
-                    if st.form_submit_button("Lançar Gasto"):
-                        msg = self.s_frota.lancar_manutencao(id_v, desc, val, str(dt), banco, forma)
-                        st.success(msg)
+                    label_data = "Data de Vencimento" if forma == "Boleto" else "Data do Pagamento"
+                    dt = c2.date_input(label_data, value=date.today())
+                    
+                    banco = c3.selectbox("Pago via (se à vista):", bancos_opcoes, disabled=(forma=="Boleto"))
+                    
+                    label_botao = "Agendar Boleto" if forma == "Boleto" else "Lançar Gasto (Baixa Caixa)"
+                    
+                    if st.form_submit_button(label_botao):
+                        if not desc:
+                            st.warning("Digite a descrição.")
+                        else:
+                            if forma == "Boleto":
+                                # --- LÓGICA DE DÍVIDA (BOLETO) ---
+                                desc_completa = f"{v_nome} - {desc}"
+                                # ID 6 = Manutenção de Veículo (Confirme se é esse ID na sua população)
+                                self.s_boleto.cadastrar_boleto(desc_completa, val, str(dt), id_categoria=6, codigo="")
+                                st.success(f"Boleto agendado com sucesso! Veja na aba Dívidas.")
+                            else:
+                                # --- LÓGICA DE CAIXA (BAIXA IMEDIATA) ---
+                                msg = self.s_frota.lancar_manutencao(id_v, desc, val, str(dt), banco, forma)
+                                st.success(msg)

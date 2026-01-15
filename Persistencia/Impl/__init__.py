@@ -14,6 +14,7 @@ from .MovimentacaoImpl import MovimentacaoImpl
 from .BoletoImpl import BoletoImpl
 from .EmprestimoImpl import EmprestimoImpl
 from .PixImpl import PixImpl
+from .CreditoImpl import CartaoCreditoImpl
 
 from .ConfiguracoesImpl import ConfiguracaoImpl
 from .CategoriaImpl import CategoriaImpl

@@ -5,13 +5,12 @@ from streamlit_option_menu import option_menu
 from Service import ConfiguracaoService, FinanceiroService, CategoriaService, RelatorioFinanceiroService
 from Service import InquilinoService, KitnetService, LocacaoService, RelatorioKitnetService
 from Service import FrotaService, EmpresaService, LogisticaService, RelatorioFrotaService
-from Service import PixService, BoletoService, EmprestimoService
+from Service import PixService, BoletoService, EmprestimoService, CreditoService 
 
 # Imports das Pages
 from UI.Pages import DashboardPage, FinanceiroPage, DividasPage, KitnetsPage, VeiculosPage, PixPage, ConfiguracoesPage
 
 # --- 🔒 CONFIGURAÇÃO DE SEGURANÇA ---
-# Tenta pegar dos segredos. Se não existir (ex: erro de config), usa uma padrão ou para o código.
 try:
     SENHA_DO_SISTEMA = st.secrets["senha_sistema"]
 except FileNotFoundError:
@@ -43,10 +42,14 @@ class AppInterface:
         self.s_relatorio_kit = RelatorioKitnetService()
         self.s_relatorio_frota = RelatorioFrotaService()
 
-        # 5. Outros
+        # 5. Outros (Bancários e Dívidas)
         self.s_pix = PixService()
         self.s_boleto = BoletoService(self.s_financeiro)
         self.s_emprestimo = EmprestimoService(self.s_financeiro)
+        
+        # --- NOVO SERVIÇO DE CRÉDITO ---
+        # Ele precisa do financeiro para lançar os pagamentos de fatura
+        self.s_credito = CreditoService(self.s_financeiro)
 
         # Configura CSS Global
         self._configurar_estilo()
@@ -55,14 +58,19 @@ class AppInterface:
         self.pages = {
             "Dashboard": DashboardPage(self.s_relatorio_fin, self.s_relatorio_frota, self.s_config),
             "Lançamentos": FinanceiroPage(self.s_financeiro, self.s_categoria, self.s_relatorio_fin, self.s_config),
-            "Dívidas & Boletos": DividasPage(self.s_boleto, self.s_emprestimo, self.s_config),
+            
+            # --- ATUALIZADO AQUI ---
+            # Passando o s_credito para a página de dívidas
+            "Dívidas & Boletos": DividasPage(self.s_boleto, self.s_emprestimo, self.s_config, self.s_credito),
+            # -----------------------
+
             "Kitnets & Aluguéis": KitnetsPage(
                 self.s_inquilino, self.s_kitnet, self.s_locacao, 
                 self.s_relatorio_kit, self.s_financeiro, self.s_config
             ),
             "Frota & Logística": VeiculosPage(
                 self.s_frota, self.s_empresa, self.s_logistica, 
-                self.s_relatorio_frota, self.s_config
+                self.s_relatorio_frota, self.s_config, self.s_boleto
             ),
             "Gerenciador Pix": PixPage(self.s_pix, self.s_config),
             "Configurações": ConfiguracoesPage(
@@ -95,7 +103,7 @@ class AppInterface:
                 
                 senha = st.text_input("Senha de Acesso", type="password")
                 
-                if st.button("Entrar", type="primary", use_container_width=True):
+                if st.button("Entrar", type="primary", width='stretch'):
                     if senha == SENHA_DO_SISTEMA:
                         st.session_state["logado"] = True
                         st.toast("Acesso Liberado!")
@@ -126,11 +134,11 @@ class AppInterface:
                 
                 st.markdown("---")
                 # Botão de Logout
-                if st.button("🔓 Sair / Logout", use_container_width=True):
+                if st.button("🔓 Sair / Logout", width='stretch'):
                     st.session_state["logado"] = False
                     st.rerun()
 
-                st.caption("Sistema v2.0 - Família Enterprise")
+                st.caption("Sistema v6.1 - Família Enterprise")
             
             # Renderiza a página escolhida
             if selected in self.pages:
