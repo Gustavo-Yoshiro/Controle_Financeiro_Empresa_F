@@ -132,6 +132,14 @@ class AppInterface:
                     default_index=0,
                 )
                 
+                # --- FORÇA REFRESH AO MUDAR DE PÁGINA ---
+                if "pagina_atual" not in st.session_state:
+                    st.session_state["pagina_atual"] = selected
+                
+                if st.session_state["pagina_atual"] != selected:
+                    st.session_state["pagina_atual"] = selected
+                    st.rerun() # <--- O segredo está aqui! Força reload limpo.
+                
                 st.markdown("---")
                 # Botão de Logout
                 if st.button("🔓 Sair / Logout", width='stretch'):

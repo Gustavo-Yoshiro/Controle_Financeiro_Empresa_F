@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from datetime import date, timedelta
 
 class DividasPage:
@@ -6,10 +7,10 @@ class DividasPage:
         self.bol = boleto_service
         self.emp = emprestimo_service
         self.cfg = config_service 
-        self.cred = credito_service # <--- Novo Serviço Injetado
+        self.cred = credito_service # Serviço de Crédito
 
     def render(self):
-        st.title("💸 Gestão de Dívidas")
+        st.title("💸 Gestão de Dívidas e Crédito")
         
         # Abas Principais
         tab_boletos, tab_cartao, tab_emprestimos = st.tabs([
@@ -73,7 +74,7 @@ class DividasPage:
                         
                         with cols[2]:
                             st.markdown(f"### R$ {b['valor']:.2f}")
-                            if st.button("✅ Pagar", key=f"btn_{b['id']}", width='stretch'):
+                            if st.button("✅ Pagar", key=f"btn_{b['id']}", use_container_width=True):
                                 msg = self.bol.pagar_boleto(b['id'], banco_escolhido)
                                 st.toast(msg)
                                 st.rerun()
@@ -81,23 +82,129 @@ class DividasPage:
                 st.success("Tudo pago nos boletos avulsos! 🎉")
 
         # =====================================================================
-        # ABA 2: CARTÃO DE CRÉDITO (A GRANDE MUDANÇA)
+        # ABA 2: CARTÃO DE CRÉDITO (O DASHBOARD COMPLETO)
         # =====================================================================
         with tab_cartao:
-            # Sub-abas para organizar o fluxo do cartão
-            sub_faturas, sub_compra, sub_config = st.tabs(["🧾 Pagar Faturas", "🛍️ Lançar Compra", "⚙️ Configurar Cartões"])
+            # Sub-abas do Cartão de Crédito
+            sub_dash, sub_compra, sub_faturas, sub_config = st.tabs([
+                "📊 Visão Geral",
+                "🛍️ Lançar Compra", 
+                "🧾 Pagar Faturas", 
+                "⚙️ Configurar Cartões"
+            ])
 
-            # --- SUB 1: VISUALIZAR E PAGAR (O que já existia) ---
-            with sub_faturas:
-                st.caption("Aqui suas compras são agrupadas automaticamente por Vencimento e Cartão.")
+            # --- SUB 1: DASHBOARD DE LIMITES ---
+            with sub_dash:
+                cartoes = self.cred.listar_nomes_cartoes()
+                faturas = self.cred.listar_faturas_agrupadas()
                 
-                # Pega os dados agrupados do CreditoService (mudou de lugar)
+                if not cartoes:
+                    st.warning("⚠️ Nenhum cartão cadastrado. Vá na aba 'Configurar Cartões' para começar.")
+                else:
+                    # Variáveis para o Resumo Geral
+                    limite_global = 0.0
+                    usado_global = 0.0
+                    
+                    # Calcular o geral primeiro
+                    infos_cartoes = {}
+                    for cartao in cartoes:
+                        info = self.cred.get_info_limite(cartao)
+                        infos_cartoes[cartao] = info
+                        limite_global += info['total']
+                        usado_global += info['usado']
+                    
+                    disp_global = limite_global - usado_global
+
+                    # Renderiza o Resumo Global no Topo
+                    st.markdown("### 🏦 Resumo Consolidado de Crédito")
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Limite Total (Todos)", f"R$ {limite_global:,.2f}")
+                    c2.metric("Comprometido Total", f"R$ {usado_global:,.2f}", delta="-Dívida Futura", delta_color="inverse")
+                    c3.metric("Poder de Compra (Livre)", f"R$ {disp_global:,.2f}", delta="Disponível", delta_color="normal")
+                    
+                    st.divider()
+                    st.markdown("### 💳 Detalhamento por Cartão")
+
+                    # Renderiza um Card para cada Cartão
+                    for cartao in cartoes:
+                        info = infos_cartoes[cartao]
+                        
+                        fats_cartao = [f for k, f in faturas.items() if f['banco'] == cartao]
+                        fats_cartao.sort(key=lambda x: x.get('data_sql', '9999-12-31')) 
+                        prox_fatura = fats_cartao[0] if fats_cartao else None
+
+                        with st.container(border=True):
+                            col_card, col_fat = st.columns([2.5, 1])
+                            
+                            col_card.markdown(f"#### {cartao}")
+                            if info['total'] > 0:
+                                pct = min(info['usado'] / info['total'], 1.0)
+                                col_card.progress(pct, text=f"Usado: R$ {info['usado']:,.2f} de R$ {info['total']:,.2f}")
+                                col_card.caption(f"🟢 **Livre para uso:** R$ {info['disponivel']:,.2f}")
+                            else:
+                                col_card.info("ℹ️ Este cartão está sem limite definido. Edite nas configurações.")
+                                col_card.caption(f"🔴 **Usado:** R$ {info['usado']:,.2f}")
+
+                            if prox_fatura:
+                                col_fat.metric("Fatura Atual/Próxima", f"R$ {prox_fatura['total']:,.2f}", 
+                                            delta=f"Vence: {prox_fatura['vencimento_br']}", delta_color="off")
+                            else:
+                                col_fat.metric("Fatura Atual/Próxima", "R$ 0,00", 
+                                            delta="Tudo limpo! 🎉", delta_color="normal")
+
+            # --- SUB 2: LANÇAR COMPRA ---
+            with sub_compra:
+                cartoes_disponiveis = self.cred.listar_nomes_cartoes()
+                
+                if not cartoes_disponiveis:
+                    st.warning("⚠️ Cadastre um cartão na aba 'Configurar Cartões' primeiro.")
+                else:
+                    with st.form("form_compra_credito", clear_on_submit=True):
+                        c1, c2 = st.columns(2)
+                        cartao_sel = c1.selectbox("Cartão Utilizado", cartoes_disponiveis)
+                        dt_compra = c2.date_input("Data da Compra", value=date.today())
+                        
+                        desc = st.text_input("Descrição", placeholder="Ex: Notebook, Jantar...")
+                        
+                        c3, c4, c5 = st.columns(3)
+                        val_total = c3.number_input("Valor TOTAL (R$)", min_value=0.01, step=10.0)
+                        parcelas = c4.number_input("Parcelas", min_value=1, max_value=24, value=1)
+                        
+                        cats = self.cfg.listar_categorias()
+                        cats_despesa = [c for c in cats if c.get('tipo') == 'despesa']
+                        mapa_cats = {c['nome']: c['id'] for c in cats_despesa}
+                        nome_cat = c5.selectbox("Categoria", list(mapa_cats.keys()))
+                        
+                        if parcelas > 1 and val_total > 0:
+                            st.info(f"ℹ️ Serão geradas {parcelas} parcelas de **R$ {val_total/parcelas:.2f}**")
+
+                        if st.form_submit_button("🚀 Lançar Compra", use_container_width=True):
+                            if not desc:
+                                st.error("Digite uma descrição.")
+                            else:
+                                msg = self.cred.registrar_compra_inteligente(
+                                    descricao=desc,
+                                    valor_total=val_total,
+                                    data_compra_str=str(dt_compra),
+                                    id_categoria=mapa_cats.get(nome_cat, 2),
+                                    nome_cartao=cartao_sel,
+                                    parcelas=int(parcelas)
+                                )
+                                if "Sucesso" in msg:
+                                    st.success(msg)
+                                    st.rerun() 
+                                else:
+                                    st.error(msg)
+
+            # --- SUB 3: VISUALIZAR E PAGAR FATURAS ---
+            with sub_faturas:
+                st.caption("Aqui suas compras são agrupadas automaticamente pelo mês de vencimento.")
+                
                 faturas = self.cred.listar_faturas_agrupadas()
                 bancos_opcoes_pag = self.cfg.listar_bancos() or ["Dinheiro"]
                 
                 if faturas:
-                    chaves_ordenadas = sorted(faturas.keys())
-                    for chave in chaves_ordenadas:
+                    for chave in sorted(faturas.keys()):
                         fatura = faturas[chave]
                         total_fatura = fatura['total']
                         itens = fatura['itens']
@@ -119,9 +226,9 @@ class DividasPage:
                             st.divider()
                             
                             c_pg1, c_pg2 = st.columns([3, 1])
-                            banco_pagador = c_pg1.selectbox(f"Pagar fatura {nome_banco} usando:", bancos_opcoes_pag, key=f"pg_{chave}")
+                            banco_pagador = c_pg1.selectbox(f"Pagar fatura usando:", bancos_opcoes_pag, key=f"pg_{chave}")
                             
-                            if c_pg2.button("💸 Pagar Fatura", key=f"btn_fat_{chave}", width='stretch', type="primary"):
+                            if c_pg2.button("💸 Pagar Fatura", key=f"btn_fat_{chave}", use_container_width=True, type="primary"):
                                 msg = self.cred.pagar_fatura_inteira(chave, banco_pagador, total_fatura)
                                 st.success(msg)
                                 st.balloons()
@@ -131,84 +238,26 @@ class DividasPage:
                                 dados_tabela = [{"Descrição": i.descricao, "Valor": f"R$ {i.valor:.2f}", "Data Original": i.data_vencimento} for i in itens]
                                 st.table(dados_tabela)
                 else:
-                    st.info("Nenhuma fatura de cartão em aberto.")
+                    st.success("Tudo pago! Nenhuma fatura de cartão em aberto. 🎉")
 
-            # --- SUB 2: LANÇAR COMPRA (Lógica do CreditoService) ---
-            with sub_compra:
-                st.caption("Use este formulário para compras parceladas. O sistema gera as faturas futuras.")
-                
-                cartoes_disponiveis = self.cred.listar_nomes_cartoes()
-                
-                if not cartoes_disponiveis:
-                    st.warning("⚠️ Cadastre um cartão na aba 'Configurar Cartões' primeiro.")
-                else:
-                    with st.form("form_compra_credito", clear_on_submit=True):
-                        c1, c2 = st.columns(2)
-                        cartao_sel = c1.selectbox("Cartão Utilizado", cartoes_disponiveis)
-                        dt_compra = c2.date_input("Data da Compra", value=date.today())
-                        
-                        # --- VISUALIZAÇÃO DO LIMITE ---
-                        # Chama o serviço para pegar o limite do cartão selecionado
-                        info_limite = self.cred.get_info_limite(cartao_sel)
-                        
-                        if info_limite['total'] > 0:
-                            percentual = min(info_limite['usado'] / info_limite['total'], 1.0)
-                            st.progress(percentual, text=f"Limite Utilizado: R$ {info_limite['usado']:,.2f} / R$ {info_limite['total']:,.2f}")
-                            st.caption(f"🟢 **Disponível: R$ {info_limite['disponivel']:,.2f}**")
-                        else:
-                            st.caption("ℹ️ Este cartão não possui limite configurado.")
-                        # -----------------------------
-
-                        desc = st.text_input("Descrição", placeholder="Ex: Notebook, Jantar...")
-                        
-                        c3, c4, c5 = st.columns(3)
-                        val_total = c3.number_input("Valor TOTAL (R$)", min_value=0.01, step=10.0)
-                        parcelas = c4.number_input("Parcelas", min_value=1, max_value=24, value=1)
-                        
-                        cats = self.cfg.listar_categorias()
-                        cats = [c for c in cats if c.get('tipo') == 'despesa']
-                        mapa_cats = {c['nome']: c['id'] for c in cats}
-                        nome_cat = c5.selectbox("Categoria", list(mapa_cats.keys()))
-                        
-                        if parcelas > 1 and val_total > 0:
-                            st.info(f"ℹ️ Serão {parcelas}x de **R$ {val_total/parcelas:.2f}**")
-
-                        if st.form_submit_button("🚀 Lançar Compra"):
-                            if not desc:
-                                st.error("Digite uma descrição.")
-                            else:
-                                msg = self.cred.registrar_compra_inteligente(
-                                    descricao=desc,
-                                    valor_total=val_total,
-                                    data_compra_str=str(dt_compra),
-                                    id_categoria=mapa_cats.get(nome_cat, 2),
-                                    nome_cartao=cartao_sel,
-                                    parcelas=int(parcelas)
-                                )
-                                if "Sucesso" in msg:
-                                    st.success(msg)
-                                    st.rerun() # Atualiza para mostrar nas faturas
-                                else:
-                                    st.error(msg) # Mostra o erro de limite se houver
-
-            # --- SUB 3: CONFIGURAR (Cadastro de Cartões) ---
+            # --- SUB 4: CONFIGURAR CARTÕES ---
             with sub_config:
-                st.caption("Cadastre seus cartões e datas de fechamento.")
+                st.caption("Cadastre seus cartões e limites.")
                 with st.form("form_novo_cartao", clear_on_submit=True):
                     c_nome, c_band = st.columns(2)
-                    nome = c_nome.text_input("Apelido (Ex: Nubank)")
+                    nome = c_nome.text_input("Apelido (Ex: Nubank, Inter)")
                     bandeira = c_band.selectbox("Bandeira", ["Mastercard", "Visa", "Elo", "Amex", "Outro"])
                     
                     c_fech, c_venc, c_lim = st.columns(3)
                     dia_fech = c_fech.number_input("Dia Fechamento", 1, 31, value=4)
                     dia_venc = c_venc.number_input("Dia Vencimento", 1, 31, value=11)
-                    limite = c_lim.number_input("Limite (Opcional)", 0.0)
+                    limite = c_lim.number_input("Limite Total", min_value=0.0, value=1000.0)
                     
-                    if st.form_submit_button("Salvar Configuração"):
+                    if st.form_submit_button("Salvar Configuração", use_container_width=True):
                         msg = self.cred.cadastrar_config_cartao(nome, dia_fech, dia_venc, limite, bandeira)
                         if "Sucesso" in msg:
                             st.success(msg)
-                            st.rerun() # <--- O SEGREDO: Atualiza a página para o cartão aparecer na lista
+                            st.rerun() 
                         else:
                             st.error(msg)
                 
@@ -217,30 +266,32 @@ class DividasPage:
                 lista = self.cred.listar_nomes_cartoes()
                 if lista:
                     for cartao in lista: st.text(f"💳 {cartao}")
+                else:
+                    st.caption("Nenhum cartão cadastrado.")
 
         # =====================================================================
-        # ABA 3: EMPRÉSTIMOS (MANTIDO IGUAL)
+        # ABA 3: EMPRÉSTIMOS
         # =====================================================================
         with tab_emprestimos:
             bancos_opcoes = self.cfg.listar_bancos() or ["Dinheiro"]
             
-            st.info("ℹ️ Ao contratar, o dinheiro entra no caixa hoje e as parcelas são geradas.")
+            st.info("ℹ️ Ao contratar, o dinheiro entra no caixa hoje e as parcelas são geradas na lista de boletos.")
 
             with st.expander("➕ Contratar Novo Empréstimo"):
                 with st.form("form_emp", clear_on_submit=True):
-                    desc = st.text_input("Descrição")
+                    desc = st.text_input("Descrição (Ex: Empréstimo BB, Financiamento Carro)")
                     c1, c2, c3 = st.columns(3)
                     v_rec = c1.number_input("Valor Recebido", 100.0)
                     v_parc = c2.number_input("Valor Parcela", 10.0)
-                    qtd = c3.number_input("Qtd", 1)
+                    qtd = c3.number_input("Quantidade de Parcelas", 1)
                     
                     c4, c5 = st.columns(2)
                     hoje = date.today()
                     dt_lib = c4.date_input("Data Liberação", value=hoje)
                     dt_pri = c4.date_input("Data 1ª Parcela", value=hoje + timedelta(days=30))
-                    bk = c5.selectbox("Banco", bancos_opcoes)
+                    bk = c5.selectbox("Banco que recebeu o dinheiro", bancos_opcoes)
                     
-                    if st.form_submit_button("Confirmar Contrato"):
+                    if st.form_submit_button("Confirmar Contrato", use_container_width=True):
                         try:
                             msg = self.emp.contratar_emprestimo(
                                 desc, v_rec, v_parc, int(qtd), 

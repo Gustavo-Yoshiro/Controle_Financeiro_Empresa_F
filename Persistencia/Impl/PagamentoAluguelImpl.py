@@ -12,7 +12,7 @@ class PagamentoAluguelImpl:
             self.atualizar(pag)
             return pag.id_aluguel
         else:
-            # ADICIONADO: valor_esperado e obs
+            
             sql = """
                 INSERT INTO pagamento_aluguel 
                 (id_contrato_kitnet, mes_referencia, valor_esperado, valor_pago, data_pagamento, status, obs)
@@ -21,18 +21,18 @@ class PagamentoAluguelImpl:
             parametros = (
                 pag.id_contrato_kitnet, 
                 pag.mes_referencia, 
-                pag.valor_esperado, # <--- Novo
+                pag.valor_esperado, 
                 pag.valor_pago, 
                 pag.data_pagamento, 
                 pag.status,
-                pag.obs             # <--- Novo
+                pag.obs             
             )
             id_gerado = self.__bd.executar(sql, parametros)
             pag.id_aluguel = id_gerado
             return id_gerado
 
     def atualizar(self, pag: PagamentoAluguel):
-        # ADICIONADO: valor_esperado e obs
+        
         sql = """
             UPDATE pagamento_aluguel 
             SET id_contrato_kitnet=?, mes_referencia=?, valor_esperado=?, 
@@ -40,13 +40,14 @@ class PagamentoAluguelImpl:
             WHERE id_aluguel=?
         """
         parametros = (
+            
             pag.id_contrato_kitnet, 
             pag.mes_referencia, 
-            pag.valor_esperado, # <--- Novo
+            pag.valor_esperado, 
             pag.valor_pago, 
             pag.data_pagamento, 
             pag.status, 
-            pag.obs,            # <--- Novo
+            pag.obs,   
             pag.id_aluguel
         )
         self.__bd.executar(sql, parametros)
@@ -67,11 +68,11 @@ class PagamentoAluguelImpl:
                 id_aluguel=row[0], 
                 id_contrato_kitnet=row[1], 
                 mes_referencia=row[2], 
-                valor_esperado=row[3], # <--- Novo
+                valor_esperado=row[3], 
                 valor_pago=row[4], 
                 data_pagamento=row[5], 
                 status=row[6],
-                obs=row[7]             # <--- Novo
+                obs=row[7]           
             )
         return None
 

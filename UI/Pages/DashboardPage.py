@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import calendar
 
 class DashboardPage:
@@ -32,7 +32,8 @@ class DashboardPage:
                 dt_ini = date(hoje.year, 1, 1)
                 dt_fim = date(hoje.year, 12, 31) 
             else:
-                dt_ini = date(2023, 1, 1)
+                # Pega desde muito tempo atrás para garantir "Desde o Início"
+                dt_ini = date(2020, 1, 1) 
                 dt_fim = date(hoje.year, 12, 31)
 
             lista_bancos = self.cfg.listar_bancos() or []
@@ -53,29 +54,37 @@ class DashboardPage:
             acumular = c4.toggle("Considerar Passado", value=True)
 
         # =====================================================================
-        # 2. CÁLCULO DA "VERDADE"
+        # 1.1 BUSCA DE DADOS (ANTECIPADA)
+        # =====================================================================
+        # Buscamos o extrato aqui para calcular a performance do veículo/filtro
+        dados_brutos_extrato = self.s_relatorio.gerar_extrato(
+            str(dt_ini), str(dt_fim), bancos_sel, None, id_veiculo_sel
+        )
+
+        # =====================================================================
+        # 2. CÁLCULO DA "VERDADE" (CARDS DE TOPO - CAIXA GERAL)
         # =====================================================================
         
-        # Busca 1: Dados do Período Selecionado (Para Saldo de Caixa e Gráficos)
+        # Busca 1: Dados do Período Selecionado (Para Saldo de Caixa)
         resumo_periodo = self.s_relatorio.get_resumo_periodo(str(dt_ini), str(dt_fim), ver_acumulado=acumular)
 
         # Busca 2: Dados TOTAIS FUTUROS (Para Dívida Real e Cards de Cartão)
         dt_futuro = date(date.today().year + 10, 12, 31)
         resumo_total = self.s_relatorio.get_resumo_periodo("2000-01-01", str(dt_futuro), ver_acumulado=True)
 
-        # Para o Saldo em Conta, usamos o do período (ou acumulado até hoje)
         val_saldo = resumo_periodo.get('saldo', 0.0)
         
-        # Para as Dívidas, usamos o TOTAL (incluindo parcelas de 2026, 2027...)
+        # Totais Futuros (Dívidas)
         val_contas_total = resumo_total.get('a_pagar_contas', 0.0)
         val_cartao_total = resumo_total.get('a_pagar_cartao', 0.0)
-        
         val_divida_total = resumo_total.get('divida_total', val_contas_total + val_cartao_total)
+        
+        # Cálculo da Realidade
         saldo_disponivel_real = val_saldo - val_divida_total
 
         st.divider()
 
-        # Semáforo da Realidade
+        # Semáforo da Realidade (Saúde Financeira Global)
         if saldo_disponivel_real < 0:
             msg_erro = f"""
             ### 🚨 SITUAÇÃO CRÍTICA
@@ -101,7 +110,7 @@ class DashboardPage:
         st.divider()
 
         # =====================================================================
-        # 3. OS QUATRO GRANDES NÚMEROS
+        # 3. METRICAS GERAIS (SALDO E DÍVIDAS)
         # =====================================================================
         
         c_saldo, c_contas, c_cartao, c_real = st.columns(4)
@@ -136,26 +145,25 @@ class DashboardPage:
             help="Saldo - (Todas as Dívidas Futuras)."
         )
 
+        st.divider()
+
         # =====================================================================
-        # 4. GRÁFICOS (AGORA COM ABAS) E TABELA
+        # 4. GRÁFICOS E EVOLUÇÃO
         # =====================================================================
         
         c_graf, c_tab = st.columns([1, 1.5])
 
         with c_graf:
-            # Abas para alternar entre "Passado" (Gastos) e "Futuro" (Dívidas)
-            tab_gastos, tab_dividas = st.tabs(["🍰 Gastos Realizados", "📉 Dívidas Futuras"])
+            tab_gastos, tab_dividas, tab_historico, tab_perf = st.tabs(["🍰 Gastos", "📉 Dívidas", "📈 Evolução", "🚚 Performance"])
             
             # --- GRÁFICO 1: GASTOS (CAIXA) ---
             with tab_gastos:
                 dados_pizza = self.s_relatorio.get_gastos_periodo_flex(str(dt_ini), str(dt_fim))
-                
                 if dados_pizza:
                     df_pizza = pd.DataFrame(dados_pizza)
                     with plt.rc_context({'text.color': 'white', 'axes.labelcolor': 'white'}):
                         fig, ax = plt.subplots(figsize=(4, 4))
                         colors = plt.get_cmap('Reds')(np.linspace(0.4, 0.9, len(df_pizza)))
-                        
                         wedges, texts, autotexts = ax.pie(
                             df_pizza['valor'], labels=df_pizza['categoria'], autopct='%1.0f%%', 
                             startangle=90, colors=colors, textprops={'fontsize': 10}
@@ -170,9 +178,7 @@ class DashboardPage:
             # --- GRÁFICO 2: DÍVIDAS (FUTURO) ---
             with tab_dividas:
                 total_dividas = val_cartao_total + val_contas_total
-                
                 if total_dividas > 0:
-                    # 1. Gráfico Macro (Cartão vs Boleto)
                     df_dividas = pd.DataFrame([
                         {"Tipo": "Fatura Cartão", "Valor": val_cartao_total},
                         {"Tipo": "Boletos/Contas", "Valor": val_contas_total}
@@ -183,64 +189,119 @@ class DashboardPage:
                     with plt.rc_context({'text.color': 'white', 'axes.labelcolor': 'white'}):
                         fig2, ax2 = plt.subplots(figsize=(3, 3))
                         colors_div = ['#8A2BE2', '#CD5C5C'] 
-                        wedges, texts, autotexts = ax2.pie(
+                        ax2.pie(
                             df_dividas['Valor'], labels=df_dividas['Tipo'], autopct='%1.0f%%', 
                             startangle=90, colors=colors_div, textprops={'fontsize': 8}
                         )
-                        for text in texts: text.set_color('white')
-                        for autotext in autotexts: autotext.set_color('white')
                         fig2.patch.set_alpha(0.0); ax2.patch.set_alpha(0.0)
                         st.pyplot(fig2)
-
-                    # 2. NOVO: Gráfico Detalhado por Categoria
-                    # Busca os boletos pendentes diretamente (usando o acesso ao DAO disponível)
+                        
+                    # Tenta mostrar por categoria se possível (acesso direto ao DAO)
                     if hasattr(self.s_relatorio, 'dao_boleto'):
                         todos_pendentes = [b for b in self.s_relatorio.dao_boleto.listar_todos() if b.status == 'pendente']
-                        
                         if todos_pendentes:
                             st.divider()
-                            st.caption("Por Categoria (Onde vai o dinheiro)")
-                            
+                            st.caption("Onde vai o dinheiro (Categorias)")
                             cats = self.cfg.listar_categorias()
                             mapa_cats = {c['id']: c['nome'] for c in cats}
-                            
                             dados_cat = {}
                             for b in todos_pendentes:
                                 nome_cat = mapa_cats.get(b.id_categoria, "Outros")
                                 dados_cat[nome_cat] = dados_cat.get(nome_cat, 0.0) + b.valor
                             
                             df_cat_futuro = pd.DataFrame(list(dados_cat.items()), columns=['Categoria', 'Valor'])
-                            df_cat_futuro = df_cat_futuro[df_cat_futuro['Valor'] > 0].sort_values('Valor', ascending=False)
-                            
-                            with plt.rc_context({'text.color': 'white', 'axes.labelcolor': 'white'}):
-                                fig3, ax3 = plt.subplots(figsize=(4, 4))
-                                colors_cat = plt.get_cmap('Set3')(np.linspace(0, 1, len(df_cat_futuro)))
-                                
-                                wedges, texts, autotexts = ax3.pie(
-                                    df_cat_futuro['Valor'], labels=df_cat_futuro['Categoria'], autopct='%1.0f%%', 
-                                    startangle=90, colors=colors_cat, textprops={'fontsize': 10}
-                                )
-                                for text in texts: text.set_color('white')
-                                for autotext in autotexts: autotext.set_color('white')
-                                fig3.patch.set_alpha(0.0); ax3.patch.set_alpha(0.0)
-                                st.pyplot(fig3)
+                            st.dataframe(df_cat_futuro.sort_values('Valor', ascending=False).style.format({"Valor": "R$ {:,.2f}"}), hide_index=True, width='stretch')
 
-                    st.caption(f"Total Futuro: R$ {total_dividas:,.2f}")
+            # --- GRÁFICO 3: EVOLUÇÃO HISTÓRICA ---
+            with tab_historico:
+                if dados_brutos_extrato:
+                    df_hist = pd.DataFrame(dados_brutos_extrato)
+                    
+                    # 1. Converte data para datetime para poder agrupar
+                    df_hist['dt_obj'] = pd.to_datetime(df_hist['raw_date'])
+                    
+                    # 2. Cria coluna Mês/Ano (ex: "2024-01")
+                    df_hist['mes_ano'] = df_hist['dt_obj'].dt.strftime('%Y-%m')
+                    
+                    # 3. Agrupa por Mês e Tipo (Receita/Despesa)
+                    df_chart = df_hist.pivot_table(
+                        index='mes_ano', 
+                        columns='tipo', 
+                        values='valor', 
+                        aggfunc='sum',
+                        fill_value=0
+                    )
+                    
+                    if 'Despesa' in df_chart.columns:
+                        df_chart['Despesa'] = df_chart['Despesa'].abs()
+                    
+                    df_chart = df_chart.sort_index()
+                    
+                    st.caption("Entradas vs Saídas (Mês a Mês)")
+                    
+                    cores_grafico = []
+                    if 'Receita' in df_chart.columns: cores_grafico.append("#3dd56d")
+                    if 'Despesa' in df_chart.columns: cores_grafico.append("#ff4b4b")
+                    
+                    st.bar_chart(df_chart, color=cores_grafico)
                 else:
-                    st.success("Tudo pago! Sem dívidas futuras.")
+                    st.info("Sem dados para histórico.")
+
+            # --- GRÁFICO 4: PERFORMANCE (NOVA ABA!) ---
+            with tab_perf:
+                titulo_perf = f"Performance: {veiculo_nome}" if id_veiculo_sel else "Performance Geral"
+                st.caption(titulo_perf)
+                
+                if dados_brutos_extrato:
+                    entradas_filtro = sum(d['valor'] for d in dados_brutos_extrato if d['valor'] > 0)
+                    saidas_filtro = sum(d['valor'] for d in dados_brutos_extrato if d['valor'] < 0)
+                    resultado_filtro = entradas_filtro + saidas_filtro
+                    
+                    # Métricas compactas
+                    c_p1, c_p2 = st.columns(2)
+                    c_p1.metric("Entradas", f"R$ {entradas_filtro:,.2f}")
+                    c_p2.metric("Saídas", f"R$ {abs(saidas_filtro):,.2f}")
+                    
+                    st.metric("Resultado Líquido", f"R$ {resultado_filtro:,.2f}", 
+                            delta="Lucro" if resultado_filtro >= 0 else "Prejuízo")
+                    
+                    st.divider()
+                    
+                    # GRÁFICO DE PIZZA POR CATEGORIA (Despesas)
+                    despesas_filtro = [d for d in dados_brutos_extrato if d['valor'] < 0]
+                    
+                    if despesas_filtro:
+                        st.caption("Detalhamento de Custos")
+                        df_perf_cat = pd.DataFrame(despesas_filtro)
+                        # Agrupa por Categoria
+                        df_chart_perf = df_perf_cat.groupby('categoria')['valor'].sum().abs().reset_index()
+                        df_chart_perf.columns = ['Categoria', 'Valor']
+                        df_chart_perf = df_chart_perf.sort_values('Valor', ascending=False)
+                        
+                        with plt.rc_context({'text.color': 'white', 'axes.labelcolor': 'white'}):
+                            fig_p, ax_p = plt.subplots(figsize=(4, 4))
+                            colors = plt.get_cmap('Reds')(np.linspace(0.4, 0.9, len(df_chart_perf)))
+                            
+                            wedges, texts, autotexts = ax_p.pie(
+                                df_chart_perf['Valor'], labels=df_chart_perf['Categoria'], autopct='%1.0f%%', 
+                                startangle=90, colors=colors, textprops={'fontsize': 10}
+                            )
+                            for text in texts: text.set_color('white')
+                            for autotext in autotexts: autotext.set_color('white')
+                            fig_p.patch.set_alpha(0.0); ax_p.patch.set_alpha(0.0)
+                            st.pyplot(fig_p)
+                    else:
+                        st.info("Sem despesas registradas para detalhar.")
+                        
+                else:
+                    st.info("Sem movimentações para este filtro.")
 
         with c_tab:
-            st.markdown("##### 🧾 Extrato do Período")
-            dados_extrato = self.s_relatorio.gerar_extrato(
-                data_inicio=str(dt_ini), 
-                data_fim=str(dt_fim),
-                filtro_bancos=bancos_sel if bancos_sel else None,
-                filtro_veiculo=id_veiculo_sel
-            )
-
-            if dados_extrato:
-                df_show = pd.DataFrame(dados_extrato)
-                colunas_desejadas = ['data', 'descricao', 'valor', 'banco']
+            st.markdown("##### 🧾 Extrato Detalhado")
+            
+            if dados_brutos_extrato:
+                df_show = pd.DataFrame(dados_brutos_extrato)
+                colunas_desejadas = ['data', 'descricao', 'valor', 'banco', 'categoria']
                 colunas_existentes = [c for c in colunas_desejadas if c in df_show.columns]
                 
                 df_show = df_show[colunas_existentes]
