@@ -5,7 +5,6 @@ from Persistencia.Entidades import Kitnet
 class KitnetService:
     def __init__(self):
         self.dao = KitnetImpl()
-        # Precisamos do contrato apenas para validar exclusão (regra de integridade)
         self.dao_contrato_validacao = ContratoKitnetImpl() 
 
     def cadastrar(self, numero: int, valor: float, identificador: str, quartos: int = 1, status: str = 'LIVRE') -> str:
@@ -27,10 +26,9 @@ class KitnetService:
                 livres[label] = k.id_kitnet
         return livres
 
-    # --- Área Administrativa ---
 
     def admin_listar_todas(self) -> List[Kitnet]:
-        return self.dao.listar_todas() # Correção: listar_todas (no feminino)
+        return self.dao.listar_todas() 
 
     def admin_editar(self, id_k: int, num: int, ident: str, val: float, st: str, quartos: int) -> str:
         k = self.dao.buscar_por_id(id_k)
@@ -39,17 +37,15 @@ class KitnetService:
             k.identificador = ident
             k.preco_padrao = val
             k.status = st
-            k.quartos = quartos # Adicionado campo quartos
+            k.quartos = quartos 
             
-            self.dao.salvar(k) # Smart Save faz Update
+            self.dao.salvar(k) 
             return "Kitnet atualizada."
         return "Erro: Kitnet não encontrada."
 
     def admin_excluir(self, id_k: int) -> str:
-        # Validação de integridade: Não apagar se tiver contrato ativo
         contratos = self.dao_contrato_validacao.listar_ativos()
         
-        # Verifica se algum contrato ativo aponta para esta kitnet
         if any(c.id_kitnet == id_k for c in contratos):
             return "Erro: Não é possível excluir. Existe contrato ativo nesta kitnet."
         

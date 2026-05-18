@@ -22,45 +22,34 @@ class RelatorioFinanceiroService:
         apenas verificando se o campo 'banco_cartao' existe.
         """
         
-        # ==========================================
-        # 1. CAIXA REALIZADO (Passado/Presente)
-        # ==========================================
+        #  CAIXA REALIZADO 
         movs = self.dao.listar_periodo(data_inicio_str, data_fim_str)
         receitas_caixa = sum(m.valor for m in movs if m.valor > 0)
         despesas_caixa = sum(m.valor for m in movs if m.valor < 0)
         saldo_caixa = receitas_caixa + despesas_caixa
 
-        # ==========================================
-        # 2. PREVISÃO / DÍVIDAS (Futuro)
-        # ==========================================
+        #  PREVISÃO / DÍVIDAS 
         
-        a_pagar_boletos = 0.0      # Contas de consumo (Água, Luz)
-        a_pagar_cartao = 0.0       # Faturas de cartão
-        divida_total_geral = 0.0   # Tudo somado
+        a_pagar_boletos = 0.0      
+        a_pagar_cartao = 0.0       
+        divida_total_geral = 0.0   
         
-        # --- 2.1 Boletos e Cartões (Tudo vem do BoletoImpl) ---
         for b in self.dao_boleto.listar_todos():
             if b.status == 'pendente':
-                # Soma na dívida total independente da data (visão macro)
                 divida_total_geral += b.valor
                 
-                # Verifica filtro de data para o Fluxo de Caixa mensal
                 entra = False
                 if ver_acumulado:
-                    # Se acumular: pega tudo do passado até o fim do mês selecionado
                     if b.data_vencimento and b.data_vencimento <= data_fim_str: entra = True
                 else:
-                    # Se não acumular: pega só o que vence neste mês específico
                     if b.data_vencimento and data_inicio_str <= b.data_vencimento <= data_fim_str: entra = True
                 
                 if entra:
-                    # LÓGICA MANTIDA E PERFEITA:
                     if b.banco_cartao: 
-                        a_pagar_cartao += b.valor # Vai pro KPI Roxo (Cartão)
+                        a_pagar_cartao += b.valor 
                     else:
-                        a_pagar_boletos += b.valor # Vai pro KPI Vermelho (Contas)
+                        a_pagar_boletos += b.valor 
 
-        # --- 2.2 Dívidas de Veículo (Conta como Boleto) ---
         for d in self.dao_divida_veiculo.listar_todas():
             if d.status == 'pendente':
                 divida_total_geral += d.valor
@@ -73,21 +62,17 @@ class RelatorioFinanceiroService:
                 
                 if entra: a_pagar_boletos += d.valor
 
-        # --- 2.3 Empréstimos ---
         for e in self.dao_emprestimo.listar_todos():
             if e.status == 'ativo':
                 restante = e.valor_total - e.valor_pago
                 if restante > 0:
                     divida_total_geral += restante
-                    # Empréstimos impactam o fluxo de boletos
                     a_pagar_boletos += restante
 
-        # --- 2.4 A Receber (Aluguéis e Alocações) ---
         a_receber_periodo = 0.0
         mes_ini_ref = data_inicio_str[:7]
         mes_fim_ref = data_fim_str[:7]
 
-        # Aluguéis Kitnet
         for a in self.dao_aluguel.listar_todos():
             if a.status in ['pendente', 'atrasado', 'parcial']:
                 entra = False
@@ -97,7 +82,6 @@ class RelatorioFinanceiroService:
                     if mes_ini_ref <= a.mes_referencia <= mes_fim_ref: entra = True
                 if entra: a_receber_periodo += (a.valor_esperado - a.valor_pago)
 
-        # Alocações Veículos
         for l in self.dao_alocacao.listar_todos():
             if l.status in ['pendente', 'atrasado', 'parcial']:
                 entra = False
@@ -107,7 +91,6 @@ class RelatorioFinanceiroService:
                     if mes_ini_ref <= l.mes_referencia <= mes_fim_ref: entra = True
                 if entra: a_receber_periodo += (l.valor_esperado - l.valor_pago)
 
-        # TOTAL COMBINADO
         total_a_pagar_periodo = a_pagar_boletos + a_pagar_cartao
 
         return {
@@ -115,7 +98,6 @@ class RelatorioFinanceiroService:
             "despesas": despesas_caixa,
             "saldo": saldo_caixa,
             
-            # KPIs DETALHADOS PARA O DASHBOARD
             "a_pagar_total": total_a_pagar_periodo, 
             "a_pagar_contas": a_pagar_boletos,      
             "a_pagar_cartao": a_pagar_cartao,       

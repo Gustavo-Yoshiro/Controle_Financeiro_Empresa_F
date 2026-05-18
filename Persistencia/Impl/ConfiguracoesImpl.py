@@ -5,9 +5,7 @@ class ConfiguracaoImpl:
     def __init__(self):
         self.__bd = BancoDeDados()
 
-    # =========================================================================
     # BANCOS
-    # =========================================================================
     def listar_bancos(self) -> List[str]:
         rows = self.__bd.executar_query("SELECT nome FROM aux_banco ORDER BY nome")
         return [r[0] for r in rows]
@@ -46,9 +44,7 @@ class ConfiguracaoImpl:
 
         return False
 
-    # =========================================================================
     # FORMAS DE PAGAMENTO
-    # =========================================================================
     def listar_formas(self) -> List[str]:
         rows = self.__bd.executar_query("SELECT nome FROM aux_forma_pagamento ORDER BY nome")
         return [r[0] for r in rows]
@@ -67,9 +63,7 @@ class ConfiguracaoImpl:
         row = self.__bd.executar_query("SELECT count(*) FROM movimentacao WHERE forma_pagamento=?", (nome,), fetchone=True)
         return row[0] > 0
 
-    # =========================================================================
     # CATEGORIAS
-    # =========================================================================
     def listar_categorias(self) -> List[Dict]:
         rows = self.__bd.executar_query("SELECT id_categoria, nome, tipo FROM categoria ORDER BY nome")
         return [{"id": r[0], "nome": r[1], "tipo": r[2]} for r in rows]

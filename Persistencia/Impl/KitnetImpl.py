@@ -35,7 +35,6 @@ class KitnetImpl:
     def atualizar(self, kitnet: Kitnet):
         self.salvar(kitnet)
 
-    # --- ADICIONADO PARA COMPLETAR O CRUD ---
     def deletar(self, id_kitnet: int) -> None:
         self.__bd.executar("DELETE FROM kitnet WHERE id_kitnet = ?", (id_kitnet,))
 

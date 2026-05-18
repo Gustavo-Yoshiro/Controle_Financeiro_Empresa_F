@@ -17,7 +17,6 @@ class RelatorioFrotaService:
         if not mes_ref:
             mes_ref = date.today().strftime("%Y-%m")
 
-        # Carrega dados
         todos_veiculos = self.dao_veiculo.listar_todos()
         todos_contratos = self.dao_contrato.listar_ativos()
         todos_pagamentos = self.dao_pagamento.listar_todos()
@@ -26,18 +25,16 @@ class RelatorioFrotaService:
         tabela = []
 
         for v in todos_veiculos:
-            # 1. Estrutura Base
             linha = {
                 "ID": v.id_veiculo,
                 "Veículo": f"{v.modelo} ({v.placa})",
                 "Status": v.status.upper(),
                 "Empresa": "---",
-                "Situação Mês": "LIVRE", # Padrão se não tiver contrato
+                "Situação Mês": "LIVRE", 
                 "Valor": "---",
                 "Alertas": ""
             }
 
-            # 2. Busca Contrato Ativo
             contrato = next((c for c in todos_contratos if c.id_veiculo == v.id_veiculo and c.ativo == 1), None)
 
             if contrato:
@@ -45,27 +42,22 @@ class RelatorioFrotaService:
                 linha["Empresa"] = empresa.razao_social if empresa else "?"
                 linha["Valor"] = f"R$ {contrato.valor_mensal:.2f}"
                 
-                # Pega todos os pagamentos deste contrato
                 pags_contrato = [p for p in todos_pagamentos if p.id_contrato_alocacao == contrato.id_contrato_alocacao]
 
-                # --- LÓGICA A: Dívida Acumulada (Passado) ---
                 divida_acumulada = 0.0
                 qtd_atrasados = 0
                 
                 for p in pags_contrato:
-                    # Se o mês do pagamento for ANTERIOR ao mês que estamos olhando
                     if p.mes_referencia < mes_ref:
-                        # Se não estiver totalmente pago
                         if p.status != 'pago':
                             falta = p.valor_esperado - p.valor_pago
-                            if falta > 0.05: # Ignora centavos
+                            if falta > 0.05: 
                                 divida_acumulada += falta
                                 qtd_atrasados += 1
                 
                 if qtd_atrasados > 0:
                     linha["Alertas"] = f"⚠️ {qtd_atrasados} pend. (R$ {divida_acumulada:.2f})"
 
-                # --- LÓGICA B: Situação do Mês Selecionado (Presente) ---
                 pag_mes = next((p for p in pags_contrato if p.mes_referencia == mes_ref), None)
 
                 if not pag_mes:
@@ -78,10 +70,9 @@ class RelatorioFrotaService:
                         falta = pag_mes.valor_esperado - pag_mes.valor_pago
                         linha["Situação Mês"] = f"🟡 PARCIAL (Falta R$ {falta:.2f})"
                     
-                    else: # pendente ou atrasado
+                    else: 
                         hoje_str = date.today().strftime("%Y-%m-%d")
                         try:
-                            # Monta data de vencimento YYYY-MM-DD
                             venc_str = f"{mes_ref}-{contrato.dia_vencimento:02d}"
                         except:
                             venc_str = f"{mes_ref}-10"
@@ -93,7 +84,6 @@ class RelatorioFrotaService:
 
             tabela.append(linha)
         
-        # Ordena: Quem tem Alerta primeiro, depois por nome
         return sorted(tabela, key=lambda x: (x['Alertas'] == "", x['Veículo']))
 
     def listar_frota_simples(self) -> List[Dict]:
@@ -106,7 +96,7 @@ class RelatorioFrotaService:
         Gera o dict para o SelectBox de Recebimento.
         Agora mostra quanto FALTA pagar (para casos parciais).
         """
-        pendentes = self.dao_pagamento.listar_pendentes() # Traz pendentes, atrasados e parciais
+        pendentes = self.dao_pagamento.listar_pendentes() 
         contratos = self.dao_contrato.listar_ativos()
         
         empresas = {e.id_empresa: e.razao_social for e in self.dao_empresa.listar_todas()}
@@ -128,7 +118,6 @@ class RelatorioFrotaService:
                 
         return opcoes
 
-    # --- KPI's ---
 
     def get_kpis_frota(self) -> Dict:
         veiculos = self.dao_veiculo.listar_todos()
@@ -149,5 +138,4 @@ class RelatorioFrotaService:
     def get_faturamento_logistica(self) -> float:
         """Soma o valor_pago real de todos os registros"""
         pagamentos = self.dao_pagamento.listar_todos()
-        # Soma o que realmente entrou no caixa (valor_pago), não a expectativa
         return sum(p.valor_pago for p in pagamentos)

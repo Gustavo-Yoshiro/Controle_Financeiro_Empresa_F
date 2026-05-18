@@ -37,7 +37,6 @@ class LocacaoService:
             print(f"Erro ao salvar arquivo: {e}")
             return None
 
-    # --- NOVO MÉTODO PARA SALVAR COMPROVANTE ---
     def _salvar_comprovante(self, arquivo_obj, id_pagamento) -> Optional[str]:
         if not arquivo_obj:
             return None
@@ -99,7 +98,7 @@ class LocacaoService:
 
     def processar_pagamento_aluguel(self, id_pagamento: int, valor_recebido: float, banco: str, 
                                     eh_quitacao_com_desconto: bool = False, obs: str = "",
-                                    arquivo_comprovante = None) -> str: # <--- Adicionado parâmetro
+                                    arquivo_comprovante = None) -> str: 
         pag = self.dao_pagamento.buscar_por_id(id_pagamento)
         if not pag: return "Pagamento não encontrado."
         
@@ -131,7 +130,6 @@ class LocacaoService:
         pag.valor_pago = novo_valor_pago_acumulado
         pag.data_pagamento = date.today().strftime("%Y-%m-%d")
         
-        # --- LÓGICA DO COMPROVANTE ---
         caminho_comprovante = self._salvar_comprovante(arquivo_comprovante, id_pagamento)
         
         texto_obs = obs
@@ -174,25 +172,8 @@ class LocacaoService:
         hoje_str = hoje.strftime("%Y-%m-%d")
         
         count_cobrancas = 0
-        encerrados_automaticamente = []
 
         for c in contratos:
-            if c.data_fim and c.data_fim < hoje_str:
-                c.ativo = 0
-                self.dao_contrato.salvar(c) 
-                
-                kitnet = self.dao_kitnet.buscar_por_id(c.id_kitnet)
-                if kitnet:
-                    nome_kit = f"{kitnet.identificador}-{kitnet.numero}"
-                    kitnet.status = 'LIVRE'
-                    self.dao_kitnet.atualizar(kitnet)
-                else:
-                    nome_kit = "?"
-
-                inquilino = self.dao_inquilino.buscar_por_id(c.id_inquilino)
-                nome_inq = inquilino.nome if inquilino else "?"
-                encerrados_automaticamente.append(f"{nome_kit} ({nome_inq})")
-                continue 
 
             try:
                 dt_cursor = datetime.strptime(c.data_inicio, "%Y-%m-%d").date()
@@ -213,9 +194,7 @@ class LocacaoService:
             except Exception as e:
                 print(f"Erro ao processar contrato {c.id_contrato_kitnet}: {e}")
         
-        msg = f"Processamento: {count_cobrancas} cobranças geradas (Varredura Completa)."
-        if encerrados_automaticamente:
-            msg += f"\n🛑 Contratos Encerrados: {', '.join(encerrados_automaticamente)}"
+        msg = f"Processamento: {count_cobrancas} cobranças geradas (Contratos por prazo indeterminado mantidos ativos)."
             
         return msg
 
@@ -246,16 +225,13 @@ class LocacaoService:
             return f"Nenhum boleto aberto encontrado no bloco {bloco_alvo}."
         return f"Sucesso! {nome_taxa} lançada para {count_atualizados} inquilinos."
 
-    # =====================================================================
-    # GESTÃO INDIVIDUAL DE DÍVIDAS E FATURAS (NOVIDADE!)
-    # =====================================================================
+    # GESTÃO INDIVIDUAL DE DÍVIDAS E FATURAS 
 
     def listar_faturas_por_contrato(self, id_contrato: int) -> List[Dict]:
         """ Busca todas as faturas geradas para o contrato selecionado """
         todos = self.dao_pagamento.listar_todos()
         faturas_contrato = [p for p in todos if p.id_contrato_kitnet == id_contrato]
         
-        # Ordena da mais recente para a mais antiga
         faturas_contrato.sort(key=lambda x: x.mes_referencia, reverse=True)
         
         res = []
@@ -316,7 +292,6 @@ class LocacaoService:
         else:
             self._criar_cobranca(id_contrato, mes_ref, valor)
             
-            # Adiciona a observação ao novo boleto
             todos_pags_atualizados = self.dao_pagamento.listar_todos()
             for p in todos_pags_atualizados:
                 if p.id_contrato_kitnet == id_contrato and p.mes_referencia == mes_ref:
@@ -325,7 +300,6 @@ class LocacaoService:
                     break
             return f"Sucesso! Nova fatura criada para {mes_ref}."
 
-    # =====================================================================
 
     def encerrar_contrato(self, id_locacao: int, data_saida: str, cobrar_multa: bool, valor_multa: float = 0.0) -> str:
         try:
@@ -350,21 +324,57 @@ class LocacaoService:
             return f"Erro ao encerrar: {e}"
 
     def listar_ativas(self) -> List[Dict]:
+        """Retorna lista de contratos ativos para a aba de Desocupação"""
         contratos = self.dao_contrato.listar_ativos()
         lista_formatada = []
+        
         for c in contratos:
             k = self.dao_kitnet.buscar_por_id(c.id_kitnet)
             i = self.dao_inquilino.buscar_por_id(c.id_inquilino)
+            
             lista_formatada.append({
                 "id": c.id_contrato_kitnet,
                 "numero": k.numero if k else "?",
                 "identificador": k.identificador if k else "?",
                 "inquilino_nome": i.nome if i else "Desconhecido",
                 "data_inicio": c.data_inicio,
+                "data_fim": c.data_fim,
                 "valor": c.valor_fechado,
                 "dia_vencimento": c.data_vencimento
             })
         return lista_formatada
+
+    def listar_encerrados_renovaveis(self) -> List[Dict]:
+        """ Busca contratos inativos onde a Kitnet está LIVRE e o Inquilino NÃO tem outro contrato """
+        sql = "SELECT id_contrato_kitnet, id_kitnet, id_inquilino, data_fim, valor_fechado, valor_esgoto_padrao, data_vencimento, mobiliado FROM contrato_kitnet WHERE ativo = 0 ORDER BY data_fim DESC LIMIT 50"
+        try:
+            rows = self.dao_contrato.db.executar_query(sql)
+        except Exception as e:
+            print(f"Erro buscar inativos: {e}")
+            return []
+            
+        lista = []
+        ativos = self.dao_contrato.listar_ativos()
+        inq_ativos = [a.id_inquilino for a in ativos]
+        
+        for r in rows:
+            k = self.dao_kitnet.buscar_por_id(r[1])
+            if k and str(k.status).strip().upper() == 'LIVRE':
+                i = self.dao_inquilino.buscar_por_id(r[2])
+                if i and i.id_inquilino not in inq_ativos:
+                    lista.append({
+                        "id_contrato": r[0],
+                        "id_kitnet": r[1],
+                        "id_inquilino": r[2],
+                        "kitnet_label": f"{k.identificador}-{k.numero}",
+                        "inquilino_nome": i.nome,
+                        "data_fim_antigo": r[3] if r[3] else "Desconhecida",
+                        "valor_fechado": r[4],
+                        "valor_esgoto": r[5] if r[5] else 0.0,
+                        "dia_vencimento": r[6],
+                        "mobiliado": r[7] if r[7] else 0
+                    })
+        return lista
 
     def listar_alugueis_pendentes(self) -> List[Dict]:
         pendentes = self.dao_pagamento.listar_pendentes()

@@ -17,22 +17,20 @@ class KitnetsPage:
     def render(self):
         st.title("🏠 Gestão de Kitnets")
         
-        # 1. Configurações
         bancos_opcoes = self.cfg.listar_bancos() or ["Dinheiro"]
         formas_opcoes = self.cfg.listar_formas() or ["Dinheiro"]
 
-        # 2. Garante atualização das cobranças
         self.s_locacao.gerar_cobrancas_mensais()
 
-        # 3. Carrega Dados Básicos
         todas_kitnets_obj = self.s_kitnet.admin_listar_todas()
         
-        # Mapeamentos auxiliares
         kits_livres = {f"{k.identificador}-{k.numero}": k.id_kitnet for k in todas_kitnets_obj if k.status == 'LIVRE'}
         todas_kits_map = {f"{k.identificador}-{k.numero}": k.id_kitnet for k in todas_kitnets_obj}
         lista_apenas_blocos = sorted(list(set([k.identificador for k in todas_kitnets_obj])))
 
-        # 4. Abas
+        contratos_ativos = self.s_locacao.dao_contrato.listar_ativos()
+        ids_inq_alocados = [c.id_inquilino for c in contratos_ativos]
+        
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "Lista Geral", 
             "Novo Contrato", 
@@ -42,12 +40,10 @@ class KitnetsPage:
             "🚪 Desocupação / Encerrar"
         ])
 
-        # --- ABA 1: LISTAGEM GERAL ---
         with tab1:
             with st.expander("🔎 Filtros Avançados", expanded=True):
                 c_ano, c_mes, c_status, c_bloco, c_inq, c_kit = st.columns([1, 1.5, 2, 1, 2, 1.5])
                 
-                # --- Filtros ---
                 ano_atual = date.today().year
                 lista_anos = list(range(ano_atual - 2, ano_atual + 4))
                 sel_ano = c_ano.selectbox("Ano", lista_anos, index=lista_anos.index(ano_atual))
@@ -71,41 +67,51 @@ class KitnetsPage:
                 lista_blocos_filtro = ["Todos"] + lista_apenas_blocos
                 filtro_bloco = c_bloco.selectbox("Bloco", lista_blocos_filtro)
 
-                # --- CARREGAMENTO ---
                 dados_tabela = self.s_relatorio.gerar_painel_geral(mes_ref=mes_ref_str)
                 df = pd.DataFrame(dados_tabela)
 
-                # --- LÓGICA DE CORREÇÃO: Pega Valor e Data do Contrato Real ---
                 if not df.empty and "Identificação" in df.columns:
                     contratos_ativos = self.s_locacao.listar_ativas()
                     map_contratos = {f"{c['identificador']}-{c['numero']}": c for c in contratos_ativos}
 
-                    vals_reais = []
                     inicios_reais = []
+                    fins_reais = []
                     
                     for idx, row in df.iterrows():
                         ident = row["Identificação"]
                         if ident in map_contratos:
                             c_dados = map_contratos[ident]
-                            vals_reais.append(f"R$ {c_dados['valor']:.2f}")
+                            
                             try:
                                 dt_fmt = datetime.strptime(c_dados['data_inicio'], "%Y-%m-%d").strftime("%d/%m/%Y")
                             except:
                                 dt_fmt = c_dados['data_inicio']
                             inicios_reais.append(dt_fmt)
+                            
+                            data_fim_raw = c_dados.get('data_fim')
+                            if data_fim_raw:
+                                try:
+                                    dt_fim_obj = datetime.strptime(data_fim_raw, "%Y-%m-%d").date()
+                                    dt_fim_fmt = dt_fim_obj.strftime("%d/%m/%Y")
+                                   
+                                    if dt_fim_obj < date.today():
+                                        dt_fim_fmt += " (Indeterminado) 🔄"
+                                except:
+                                    dt_fim_fmt = data_fim_raw
+                            else:
+                                dt_fim_fmt = "-"
+                            fins_reais.append(dt_fim_fmt)
                         else:
-                            val_orig = row.get("Valor", 0)
-                            try:
-                                vals_reais.append(f"R$ {float(val_orig):.2f}" if val_orig else "-")
-                            except:
-                                vals_reais.append(f"R$ {val_orig}" if val_orig else "-")
                             inicios_reais.append("-")
+                            fins_reais.append("-")
 
-                    df["Valor (Contrato)"] = vals_reais
                     df["Início Contrato"] = inicios_reais
+                    df["Fim Contrato"] = fins_reais
                     
                     if "Valor" in df.columns:
                         df = df.drop(columns=["Valor"])
+                    if "Valor (Contrato)" in df.columns:
+                        df = df.drop(columns=["Valor (Contrato)"])
 
                 lista_inq = ["Todos"] + list(df[df["Inquilino"] != "---"]["Inquilino"].unique()) if not df.empty else ["Todos"]
                 filtro_inq = c_inq.selectbox("Inquilino", lista_inq)
@@ -113,7 +119,6 @@ class KitnetsPage:
                 lista_kits = ["Todas"] + list(df["Identificação"].unique()) if not df.empty else ["Todas"]
                 filtro_kit = c_kit.selectbox("Kitnet", lista_kits)
 
-            # --- APLICAÇÃO DOS FILTROS ---
             if not df.empty:
                 if filtro_bloco != "Todos":
                     df = df[df["Identificação"].str.startswith(f"{filtro_bloco}-")]
@@ -156,9 +161,8 @@ class KitnetsPage:
                     hide_index=True
                 )
             else:
-                st.info(f"Nenhum registro encontrado para {mes_ref_str}.")
+                st.info(f"Nenhum registo encontrado para {mes_ref_str}.")
 
-        # --- ABA 2: CADASTRO KITNET / CONTRATO ---
         with tab2:
             tipo = st.radio("O que deseja fazer?", ["Nova Kitnet", "Novo Contrato"], horizontal=True)
             
@@ -183,10 +187,13 @@ class KitnetsPage:
                             nome_k = st.selectbox("Selecione a Kitnet", list(kits_livres.keys()))
                             k_id_sel = kits_livres[nome_k]
 
-                        inq_map = self.s_inquilino.listar_simples()
+                        inq_map_bruto = self.s_inquilino.listar_simples()
+                        
+                       
+                        inq_map = {nome: id_inq for nome, id_inq in inq_map_bruto.items() if id_inq not in ids_inq_alocados}
                         
                         if not inq_map:
-                            st.warning("Cadastre inquilinos na aba 'Inquilinos' primeiro.")
+                            st.warning("Não há inquilinos disponíveis (Todos já possuem contrato ou nenhum foi cadastrado).")
                             i_id_sel = None
                         else:
                             nome_i = st.selectbox("Selecione o Inquilino", list(inq_map.keys()))
@@ -202,6 +209,7 @@ class KitnetsPage:
                         st.markdown("###### 🛋️ Detalhes e Arquivos")
                         c4, c5 = st.columns([1, 2])
                         dt_ini = c4.date_input("Início Contrato", value=date.today())
+                        
                         dt_fim = c4.date_input("Data do Término (Encerramento)", value=date.today())
                         
                         eh_mobiliado = c4.checkbox("Possui Mobília?", value=False)
@@ -221,7 +229,7 @@ class KitnetsPage:
                                     valor_esgoto=val_esgoto,
                                     dia_vencimento=int(dia), 
                                     data_inicio=str(dt_ini),
-                                    data_fim=str(dt_fim),
+                                    data_fim=str(dt_fim), 
                                     mobiliado=mob_int,
                                     obs_mobiliado=obs_mob,
                                     arquivo_upload=arquivo_contrato
@@ -233,7 +241,6 @@ class KitnetsPage:
                             else:
                                 st.error("Preencha todos os campos obrigatórios.")
 
-        # --- ABA 3: RECEBIMENTO DE ALUGUEL ---
         with tab3:
             st.subheader("Contas a Receber (Pendentes)")
             
@@ -255,8 +262,7 @@ class KitnetsPage:
                 st.markdown("---")
                 
                 st.write("#### Detalhes do Pagamento")
-                
-                # --- NOVO: Usando form para o upload não recarregar a página antes da hora ---
+               
                 with st.form(key=f"form_pagamento_{dados_cobranca['id_pagamento']}", clear_on_submit=True):
                     c1, c2 = st.columns(2)
                     val_sugerido = float(dados_cobranca['valor_restante'])
@@ -289,7 +295,7 @@ class KitnetsPage:
                             banco=banco_rec,
                             eh_quitacao_com_desconto=eh_acordo,
                             obs=obs,
-                            arquivo_comprovante=arquivo_comp # <--- Passando o arquivo
+                            arquivo_comprovante=arquivo_comp 
                         )
                         if "Sucesso" in msg:
                             st.success(msg)
@@ -297,7 +303,6 @@ class KitnetsPage:
                         else:
                             st.error(msg)
 
-        # --- ABA 4: DESPESAS E TAXAS VARIÁVEIS ---
         with tab4:
             st.title("💸 Contas e Faturas")
             
@@ -307,7 +312,6 @@ class KitnetsPage:
                 "🧾 Caixa da Casa (Despesa)"
             ])
 
-            # --- SUB-ABA 1: LANÇAR TAXA NO ALUGUEL ---
             with aba_taxas:
                 st.info("Adiciona o valor da água/esgoto na conta de todos os inquilinos ativos de um Bloco.")
                 
@@ -340,7 +344,6 @@ class KitnetsPage:
                             else:
                                 st.warning(msg)
 
-            # --- SUB-ABA 2: GESTÃO DE FATURAS INDIVIDUAIS ---
             with aba_avulsa:
                 st.info("Edite os valores esperados, cancele faturas geradas por engano, ou adicione novas cobranças proporcionais.")
                 
@@ -367,7 +370,7 @@ class KitnetsPage:
                             hoje = date.today()
                             mes_ref_div = st.text_input("Mês de Referência (YYYY-MM)", value=f"{hoje.year}-{hoje.month:02d}")
                             
-                            if st.form_submit_button("Lançar Cobrança", width='stretch'):
+                            if st.form_submit_button("Lançar Cobrança",  width='stretch'):
                                 if not desc_divida:
                                     st.error("Digite o motivo.")
                                 else:
@@ -385,8 +388,25 @@ class KitnetsPage:
                         faturas_inq = self.s_locacao.listar_faturas_por_contrato(id_contrato_sel)
                         
                         if not faturas_inq:
-                            st.caption("Nenhuma fatura registrada para este contrato.")
+                            st.caption("Nenhuma fatura registada para este contrato.")
                         else:
+                            faturas_ativas = [f for f in faturas_inq if f['status'] != 'cancelado']
+                            if faturas_ativas:
+                                with st.expander("🛠️ Ações em Massa (Cancelar Várias)", expanded=False):
+                                    with st.form("form_bulk_cancel", clear_on_submit=True):
+                                        mapa_bulk = {f"Mês: {f['mes_referencia']} | R$ {f['valor_esperado']:.2f} ({f['status'].upper()})": f['id_pagamento'] for f in faturas_ativas}
+                                        fats_selecionadas = st.multiselect("Selecione as faturas que deseja CANCELAR:", list(mapa_bulk.keys()))
+                                        
+                                        if st.form_submit_button("🗑️ Cancelar Selecionadas", type="primary",  width='stretch'):
+                                            if not fats_selecionadas:
+                                                st.warning("Selecione pelo menos uma fatura para cancelar.")
+                                            else:
+                                                for f_label in fats_selecionadas:
+                                                    self.s_locacao.deletar_fatura(mapa_bulk[f_label])
+                                                st.success(f"{len(fats_selecionadas)} faturas canceladas com sucesso!")
+                                                st.rerun()
+                                st.markdown("---")
+
                             for f in faturas_inq:
                                 if f['status'] == 'pago': status_icone = "🟢 PAGO"
                                 elif f['status'] == 'parcial': status_icone = "🟠 PARCIAL"
@@ -407,12 +427,11 @@ class KitnetsPage:
                                         st.rerun()
                                         
                                     if f['status'] != 'cancelado':
-                                        if c_btn2.button("🗑️ Cancelar Fatura", type="primary", key=f"del_{f['id_pagamento']}", width='stretch'):
+                                        if c_btn2.button("🗑️ Cancelar Fatura", type="primary", key=f"del_{f['id_pagamento']}",  width='stretch'):
                                             msg = self.s_locacao.deletar_fatura(f['id_pagamento'])
                                             st.toast(msg)
                                             st.rerun()
 
-            # --- SUB-ABA 3: REGISTRAR PAGAMENTO DE CONTA ---
             with aba_despesas:
                 st.write("Registre aqui o dinheiro que SAIU do caixa para a manutenção ou contas da Kitnet.")
                 with st.form("form_despesa_kit"):
@@ -466,7 +485,6 @@ class KitnetsPage:
                             )
                             st.success(f"✅ {msg}")
 
-        # --- ABA 5: CADASTRO DE INQUILINOS ---
         with tab5:
             c_form, c_lista = st.columns([1, 2])
             
@@ -519,10 +537,9 @@ class KitnetsPage:
                 else:
                     st.info("Ninguém cadastrado.")
 
-        # --- ABA 6: DESOCUPAÇÃO E ENCERRAMENTO ---
         with tab6:
-            st.subheader("🚪 Encerrar Contrato e Liberar Kitnet")
-            st.info("Aqui você encerra o contrato atual. A Kitnet voltará a ficar LIVRE. As dívidas passadas continuam registradas no sistema.")
+            st.subheader("⚙️ Gestão de Contratos Ativos")
+            st.info("Edite as informações do contrato (datas, valores) ou encerre-o para libertar a Kitnet.")
 
             contratos_ativos = self.s_locacao.listar_ativas() 
 
@@ -530,29 +547,65 @@ class KitnetsPage:
                 st.success("Nenhuma kitnet ocupada no momento.")
             else:
                 for contrato in contratos_ativos:
-                    label_contrato = f"Kitnet {contrato.get('numero')} - {contrato.get('inquilino_nome')} (Entrou em: {contrato.get('data_inicio')})"
+                    data_inicio_fmt = contrato.get('data_inicio')
+                    try: data_inicio_fmt = datetime.strptime(contrato.get('data_inicio'), "%Y-%m-%d").strftime("%d/%m/%Y")
+                    except: pass
+                    
+                    label_contrato = f"Kitnet {contrato.get('numero')} - {contrato.get('inquilino_nome')} (Início: {data_inicio_fmt})"
                     
                     with st.expander(label_contrato):
-                        c1, c2 = st.columns([1, 1])
-                        c1.write(f"**Valor Atual:** R$ {contrato.get('valor')}")
-                        c1.write(f"**Vencimento todo dia:** {contrato.get('dia_vencimento')}")
+                        aba_edit, aba_encerra = st.tabs(["✏️ Editar Dados", "🚪 Encerrar Contrato"])
                         
-                        with c2.form(key=f"form_exit_{contrato.get('id')}"):
-                            st.write("🔴 **Dados do Encerramento**")
-                            data_saida = st.date_input("Data da Entrega das Chaves", value=date.today())
-                            
-                            st.markdown("---")
-                            cobrar_multa = st.checkbox("Cobrar Multa por Quebra de Contrato?", value=False)
-                            valor_multa = st.number_input("Valor da Multa (R$)", value=0.0, step=100.0)
-                            
-                            obs_saida = st.text_area("Motivo / Observação", value="Inquilino desocupou o imóvel. Dívidas anteriores mantidas.")
+                        with aba_edit:
+                            with st.form(key=f"form_edit_{contrato.get('id')}"):
+                                st.write("Altere os dados abaixo e guarde para atualizar o contrato em vigor.")
+                                c1, c2 = st.columns(2)
+                                novo_val = c1.number_input("Valor do Aluguer (R$)", min_value=0.0, value=float(contrato.get('valor', 0.0)))
+                                novo_venc = c2.number_input("Dia de Vencimento", min_value=1, max_value=31, value=int(contrato.get('dia_vencimento', 10)))
+                                
+                                c3, c4 = st.columns(2)
+                                dt_ini_str = contrato.get('data_inicio')
+                                try: dt_ini_obj = datetime.strptime(dt_ini_str, "%Y-%m-%d").date() if dt_ini_str else date.today()
+                                except: dt_ini_obj = date.today()
+                                
+                                dt_fim_str = contrato.get('data_fim')
+                                try: dt_fim_obj = datetime.strptime(dt_fim_str, "%Y-%m-%d").date() if dt_fim_str else date.today()
+                                except: dt_fim_obj = date.today()
+                                
+                                nova_dt_ini = c3.date_input("Data de Início", value=dt_ini_obj)
+                                nova_dt_fim = c4.date_input("Data de Fim", value=dt_fim_obj)
+                                
+                                if st.form_submit_button("💾 Guardar Alterações", type="primary",  width='stretch'):
+                                   
+                                    cont_obj = self.s_locacao.dao_contrato.buscar_por_id(contrato.get('id'))
+                                    if cont_obj:
+                                        cont_obj.valor_fechado = novo_val
+                                        cont_obj.data_vencimento = novo_venc
+                                        cont_obj.data_inicio = str(nova_dt_ini)
+                                        cont_obj.data_fim = str(nova_dt_fim)
+                                        self.s_locacao.dao_contrato.salvar(cont_obj)
+                                        st.success("Contrato atualizado com sucesso!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Erro ao encontrar o contrato na base de dados.")
 
-                            if st.form_submit_button("Confirmar Desocupação 🚪"):
-                                res = self.s_locacao.encerrar_contrato(
-                                    id_locacao=contrato.get('id'),
-                                    data_saida=str(data_saida),
-                                    cobrar_multa=cobrar_multa,
-                                    valor_multa=valor_multa
-                                )
-                                st.success(res)
-                                st.rerun()
+                        with aba_encerra:
+                            with st.form(key=f"form_exit_{contrato.get('id')}"):
+                                st.write("🔴 **Dados do Encerramento**")
+                                data_saida = st.date_input("Data da Entrega das Chaves", value=date.today())
+                                
+                                st.markdown("---")
+                                cobrar_multa = st.checkbox("Cobrar Multa por Quebra de Contrato?", value=False)
+                                valor_multa = st.number_input("Valor da Multa (R$)", value=0.0, step=100.0)
+                                
+                                obs_saida = st.text_area("Motivo / Observação", value="Inquilino desocupou o imóvel. Dívidas anteriores mantidas.")
+
+                                if st.form_submit_button("Confirmar Desocupação 🚪"):
+                                    res = self.s_locacao.encerrar_contrato(
+                                        id_locacao=contrato.get('id'),
+                                        data_saida=str(data_saida),
+                                        cobrar_multa=cobrar_multa,
+                                        valor_multa=valor_multa
+                                    )
+                                    st.success(res)
+                                    st.rerun()

@@ -3,26 +3,22 @@ import pandas as pd
 from datetime import date
 
 class VeiculosPage:
-    # Adicionado boleto_service nos parâmetros
     def __init__(self, frota_service, empresa_service, logistica_service, relatorio_service, config_service, boleto_service):
-        self.s_frota = frota_service       # Cadastro/Manutenção de Veículos
-        self.s_empresa = empresa_service   # Cadastro de Empresas
-        self.s_logistica = logistica_service # Lógica de Contrato e Pagamento
-        self.s_relatorio = relatorio_service # Relatórios Inteligentes
-        self.cfg = config_service          # Configurações gerais
-        self.s_boleto = boleto_service     # <--- Novo: Para lançar boletos de manutenção
+        self.s_frota = frota_service       
+        self.s_empresa = empresa_service   
+        self.s_logistica = logistica_service 
+        self.s_relatorio = relatorio_service 
+        self.cfg = config_service          
+        self.s_boleto = boleto_service    
 
     def render(self):
         st.title("🚚 Gestão de Frota")
         
-        # 1. Configurações e Robô Mensal
         bancos_opcoes = self.cfg.listar_bancos() or ["Dinheiro"]
         formas_opcoes = self.cfg.listar_formas() or ["Dinheiro"]
         
-        # Garante que as faturas do mês atual existam
         self.s_logistica.gerar_cobrancas_mensais()
 
-        # 2. KPIs do Topo
         kpis = self.s_relatorio.get_kpis_frota()
         faturamento = self.s_relatorio.get_faturamento_logistica()
         
@@ -34,7 +30,6 @@ class VeiculosPage:
         
         st.divider()
 
-        # 3. Abas de Navegação
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "Minha Frota (Painel)", 
             "🏢 Empresas", 
@@ -43,17 +38,14 @@ class VeiculosPage:
             "🛠️ Manutenção"
         ])
 
-        # --- ABA 1: PAINEL INTELIGENTE ---
         with tab1:
             with st.expander("🔎 Filtros de Período", expanded=True):
                 c_ano, c_mes = st.columns([1, 1])
                 
-                # Filtro Ano
                 ano_atual = date.today().year
                 lista_anos = list(range(ano_atual - 2, ano_atual + 4))
                 sel_ano = c_ano.selectbox("Ano", lista_anos, index=lista_anos.index(ano_atual))
 
-                # Filtro Mês
                 mes_atual = date.today().month
                 mapa_meses = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
                 lista_meses_str = [f"{k:02d} - {v}" for k, v in mapa_meses.items()]
@@ -62,7 +54,6 @@ class VeiculosPage:
                 mes_num = sel_mes_str.split(" - ")[0]
                 mes_ref_str = f"{sel_ano}-{mes_num}"
 
-            # Cadastrar Novo Veículo (Botão Rápido)
             with st.popover("➕ Cadastrar Veículo"):
                 with st.form("fv", clear_on_submit=True):
                     m = st.text_input("Modelo (Ex: Fiat Uno)")
@@ -77,7 +68,6 @@ class VeiculosPage:
                         else:
                             st.warning("Preencha modelo e placa.")
 
-            # GERA O RELATÓRIO
             dados = self.s_relatorio.gerar_painel_frota(mes_ref=mes_ref_str)
             df = pd.DataFrame(dados)
 
@@ -103,7 +93,6 @@ class VeiculosPage:
             else:
                 st.info("Nenhum veículo cadastrado.")
 
-        # --- ABA 2: EMPRESAS ---
         with tab2:
             c_form, c_list = st.columns([1, 2])
             with c_form:
@@ -129,7 +118,6 @@ class VeiculosPage:
                 else:
                     st.info("Nenhuma empresa cadastrada.")
 
-        # --- ABA 3: CONTRATO ---
         with tab3:
             st.subheader("Alocar Veículo")
             
@@ -163,7 +151,6 @@ class VeiculosPage:
                             st.success(msg)
                             st.rerun()
 
-        # --- ABA 4: RECEBER (COM LÓGICA DINÂMICA) ---
         with tab4:
             st.subheader("Faturas de Alocação Pendentes")
             
@@ -194,7 +181,6 @@ class VeiculosPage:
                     st.success(msg)
                     st.rerun()
 
-        # --- ABA 5: DESPESAS (MANUTENÇÃO) ---
         with tab5:
             st.subheader("Lançar Manutenção/Gasto")
             
@@ -214,8 +200,6 @@ class VeiculosPage:
                     c1, c2 = st.columns(2)
                     val = c1.number_input("Valor (R$)", min_value=0.01)
                     
-                    # Seletor de forma PRIMEIRO para decidir a lógica do botão
-                    # Se for Boleto, a data é Vencimento. Se for outro, é Pagamento.
                     c3, c4 = st.columns(2)
                     forma = c4.selectbox("Forma:", formas_opcoes)
                     
@@ -231,12 +215,10 @@ class VeiculosPage:
                             st.warning("Digite a descrição.")
                         else:
                             if forma == "Boleto":
-                                # --- LÓGICA DE DÍVIDA (BOLETO) ---
                                 desc_completa = f"{v_nome} - {desc}"
-                                # ID 6 = Manutenção de Veículo (Confirme se é esse ID na sua população)
+                                
                                 self.s_boleto.cadastrar_boleto(desc_completa, val, str(dt), id_categoria=6, codigo="")
                                 st.success(f"Boleto agendado com sucesso! Veja na aba Dívidas.")
                             else:
-                                # --- LÓGICA DE CAIXA (BAIXA IMEDIATA) ---
                                 msg = self.s_frota.lancar_manutencao(id_v, desc, val, str(dt), banco, forma)
                                 st.success(msg)

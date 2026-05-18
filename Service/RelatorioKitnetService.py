@@ -10,7 +10,6 @@ class RelatorioKitnetService:
         self.dao_pagamento = PagamentoAluguelImpl()
         self.dao_inquilino = InquilinoImpl()
 
-    # Altere a assinatura do método para aceitar mes_ref
     def gerar_painel_geral(self, mes_ref: str = None) -> List[dict]:
         """
         Gera dados da tabela. Se mes_ref for None, usa o mês atual.
@@ -22,13 +21,11 @@ class RelatorioKitnetService:
         todos_pagamentos = self.dao_pagamento.listar_todos()
         todos_inquilinos = self.dao_inquilino.listar_todos()
         
-        # Se não informou mês, usa o atual
         if not mes_ref:
             mes_ref = date.today().strftime("%Y-%m")
 
         tabela = []
         for k in todas_kits:
-            # ... (Lógica de montagem da linha igual a anterior) ...
             nome_visual = f"{k.identificador}-{k.numero}"
             linha = {
                 "ID": k.id_kitnet, 
@@ -50,11 +47,10 @@ class RelatorioKitnetService:
                     
                     pags_do_contrato = [p for p in todos_pagamentos if p.id_contrato_kitnet == contrato.id_contrato_kitnet]
                     
-                    # 1. Alertas (Histórico ANTERIOR ao mês selecionado)
                     divida_acumulada = 0.0
                     qtd_atrasados = 0
                     for p in pags_do_contrato:
-                        if p.mes_referencia < mes_ref: # <--- MUDOU AQUI (Usa mes_ref)
+                        if p.mes_referencia < mes_ref: 
                             if p.status in ['pendente', 'atrasado', 'parcial']:
                                 falta = p.valor_esperado - p.valor_pago
                                 if falta > 0.05:
@@ -64,24 +60,18 @@ class RelatorioKitnetService:
                     if qtd_atrasados > 0:
                         linha["Alertas"] = f"⚠️ {qtd_atrasados} boletos (R$ {divida_acumulada:.2f})"
 
-                    # 2. Situação do Mês Selecionado
                     pag_mes = next((p for p in pags_do_contrato if p.mes_referencia == mes_ref), None) # <--- MUDOU AQUI
                     
                     if not pag_mes:
                         linha["Situação Mês"] = "⚪ Aguardando Cobrança"
                     else:
-                        # ... (Resto da lógica igual) ...
                         status_bd = pag_mes.status
                         if status_bd == 'pago':
                             linha["Situação Mês"] = "✅ PAGO"
                         elif status_bd == 'parcial':
                             restante = pag_mes.valor_esperado - pag_mes.valor_pago
                             linha["Situação Mês"] = f"🟡 PARCIAL (Falta R$ {restante:.2f})"
-                        else: # pendente
-                            # Verifica se está atrasado considerando o MÊS QUE ESTAMOS OLHANDO
-                            # Se estou olhando um relatório passado (ex: 2022), e estava pendente, então atrasou.
-                            # Se estou olhando o mês atual, compara com o dia de hoje.
-                            
+                        else: 
                             hoje_str = date.today().strftime("%Y-%m-%d")
                             vencimento_str = f"{mes_ref}-{contrato.data_vencimento:02d}"
                             
@@ -95,8 +85,6 @@ class RelatorioKitnetService:
         tabela.sort(key=lambda x: x['Identificação'])
         return tabela
 
-    # Mantido para compatibilidade caso use em outro lugar, 
-    # mas a KitnetsPage agora usa o LocacaoService para o Dropdown.
     def listar_pendencias_formatadas(self) -> Dict[str, int]:
         pagamentos = self.dao_pagamento.listar_pendentes() 
         opcoes = {}
@@ -111,7 +99,6 @@ class RelatorioKitnetService:
                 num = k.numero if k else "?"
                 nome_i = i.nome if i else "?"
                 
-                # Atualizado para usar valor_esperado (que soma esgoto)
                 valor_mostrar = pag.valor_esperado - pag.valor_pago
                 
                 texto = f"{ident}-{num} | {nome_i} | Ref: {pag.mes_referencia} | Falta R$ {valor_mostrar:.2f}"

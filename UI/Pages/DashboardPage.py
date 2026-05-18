@@ -15,9 +15,7 @@ class DashboardPage:
         st.title("📊 Painel de Controle")
         st.caption("Visão da Saúde Financeira Real")
 
-        # =====================================================================
-        # 1. FILTROS
-        # =====================================================================
+        # FILTROS
         with st.expander("🔍 Filtros e Período", expanded=False):
             c1, c2, c3, c4 = st.columns(4)
             
@@ -32,7 +30,6 @@ class DashboardPage:
                 dt_ini = date(hoje.year, 1, 1)
                 dt_fim = date(hoje.year, 12, 31) 
             else:
-                # Pega desde muito tempo atrás para garantir "Desde o Início"
                 dt_ini = date(2020, 1, 1) 
                 dt_fim = date(hoje.year, 12, 31)
 
@@ -53,38 +50,28 @@ class DashboardPage:
             
             acumular = c4.toggle("Considerar Passado", value=True)
 
-        # =====================================================================
-        # 1.1 BUSCA DE DADOS (ANTECIPADA)
-        # =====================================================================
-        # Buscamos o extrato aqui para calcular a performance do veículo/filtro
+        # BUSCA DE DADOS (ANTECIPADA)
         dados_brutos_extrato = self.s_relatorio.gerar_extrato(
             str(dt_ini), str(dt_fim), bancos_sel, None, id_veiculo_sel
         )
 
-        # =====================================================================
-        # 2. CÁLCULO DA "VERDADE" (CARDS DE TOPO - CAIXA GERAL)
-        # =====================================================================
+        #  CÁLCULO DA "VERDADE" 
         
-        # Busca 1: Dados do Período Selecionado (Para Saldo de Caixa)
         resumo_periodo = self.s_relatorio.get_resumo_periodo(str(dt_ini), str(dt_fim), ver_acumulado=acumular)
 
-        # Busca 2: Dados TOTAIS FUTUROS (Para Dívida Real e Cards de Cartão)
         dt_futuro = date(date.today().year + 10, 12, 31)
         resumo_total = self.s_relatorio.get_resumo_periodo("2000-01-01", str(dt_futuro), ver_acumulado=True)
 
         val_saldo = resumo_periodo.get('saldo', 0.0)
         
-        # Totais Futuros (Dívidas)
         val_contas_total = resumo_total.get('a_pagar_contas', 0.0)
         val_cartao_total = resumo_total.get('a_pagar_cartao', 0.0)
         val_divida_total = resumo_total.get('divida_total', val_contas_total + val_cartao_total)
         
-        # Cálculo da Realidade
         saldo_disponivel_real = val_saldo - val_divida_total
 
         st.divider()
 
-        # Semáforo da Realidade (Saúde Financeira Global)
         if saldo_disponivel_real < 0:
             msg_erro = f"""
             ### 🚨 SITUAÇÃO CRÍTICA
@@ -109,9 +96,7 @@ class DashboardPage:
 
         st.divider()
 
-        # =====================================================================
-        # 3. METRICAS GERAIS (SALDO E DÍVIDAS)
-        # =====================================================================
+        #  METRICAS GERAIS (SALDO E DÍVIDAS)
         
         c_saldo, c_contas, c_cartao, c_real = st.columns(4)
 
@@ -147,16 +132,13 @@ class DashboardPage:
 
         st.divider()
 
-        # =====================================================================
-        # 4. GRÁFICOS E EVOLUÇÃO
-        # =====================================================================
+        #  GRÁFICOS E EVOLUÇÃO
         
         c_graf, c_tab = st.columns([1, 1.5])
 
         with c_graf:
             tab_gastos, tab_dividas, tab_historico, tab_perf = st.tabs(["🍰 Gastos", "📉 Dívidas", "📈 Evolução", "🚚 Performance"])
             
-            # --- GRÁFICO 1: GASTOS (CAIXA) ---
             with tab_gastos:
                 dados_pizza = self.s_relatorio.get_gastos_periodo_flex(str(dt_ini), str(dt_fim))
                 if dados_pizza:
@@ -175,7 +157,6 @@ class DashboardPage:
                 else:
                     st.info("Sem gastos registrados.")
 
-            # --- GRÁFICO 2: DÍVIDAS (FUTURO) ---
             with tab_dividas:
                 total_dividas = val_cartao_total + val_contas_total
                 if total_dividas > 0:
@@ -196,7 +177,6 @@ class DashboardPage:
                         fig2.patch.set_alpha(0.0); ax2.patch.set_alpha(0.0)
                         st.pyplot(fig2)
                         
-                    # Tenta mostrar por categoria se possível (acesso direto ao DAO)
                     if hasattr(self.s_relatorio, 'dao_boleto'):
                         todos_pendentes = [b for b in self.s_relatorio.dao_boleto.listar_todos() if b.status == 'pendente']
                         if todos_pendentes:
@@ -212,18 +192,14 @@ class DashboardPage:
                             df_cat_futuro = pd.DataFrame(list(dados_cat.items()), columns=['Categoria', 'Valor'])
                             st.dataframe(df_cat_futuro.sort_values('Valor', ascending=False).style.format({"Valor": "R$ {:,.2f}"}), hide_index=True, width='stretch')
 
-            # --- GRÁFICO 3: EVOLUÇÃO HISTÓRICA ---
             with tab_historico:
                 if dados_brutos_extrato:
                     df_hist = pd.DataFrame(dados_brutos_extrato)
                     
-                    # 1. Converte data para datetime para poder agrupar
                     df_hist['dt_obj'] = pd.to_datetime(df_hist['raw_date'])
                     
-                    # 2. Cria coluna Mês/Ano (ex: "2024-01")
                     df_hist['mes_ano'] = df_hist['dt_obj'].dt.strftime('%Y-%m')
                     
-                    # 3. Agrupa por Mês e Tipo (Receita/Despesa)
                     df_chart = df_hist.pivot_table(
                         index='mes_ano', 
                         columns='tipo', 
@@ -247,7 +223,6 @@ class DashboardPage:
                 else:
                     st.info("Sem dados para histórico.")
 
-            # --- GRÁFICO 4: PERFORMANCE (NOVA ABA!) ---
             with tab_perf:
                 titulo_perf = f"Performance: {veiculo_nome}" if id_veiculo_sel else "Performance Geral"
                 st.caption(titulo_perf)
@@ -257,7 +232,6 @@ class DashboardPage:
                     saidas_filtro = sum(d['valor'] for d in dados_brutos_extrato if d['valor'] < 0)
                     resultado_filtro = entradas_filtro + saidas_filtro
                     
-                    # Métricas compactas
                     c_p1, c_p2 = st.columns(2)
                     c_p1.metric("Entradas", f"R$ {entradas_filtro:,.2f}")
                     c_p2.metric("Saídas", f"R$ {abs(saidas_filtro):,.2f}")
@@ -267,13 +241,11 @@ class DashboardPage:
                     
                     st.divider()
                     
-                    # GRÁFICO DE PIZZA POR CATEGORIA (Despesas)
                     despesas_filtro = [d for d in dados_brutos_extrato if d['valor'] < 0]
                     
                     if despesas_filtro:
                         st.caption("Detalhamento de Custos")
                         df_perf_cat = pd.DataFrame(despesas_filtro)
-                        # Agrupa por Categoria
                         df_chart_perf = df_perf_cat.groupby('categoria')['valor'].sum().abs().reset_index()
                         df_chart_perf.columns = ['Categoria', 'Valor']
                         df_chart_perf = df_chart_perf.sort_values('Valor', ascending=False)

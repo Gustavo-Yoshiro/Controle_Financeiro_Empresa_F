@@ -21,11 +21,10 @@ class CategoriaService:
             return cat.nome
         return "Desconhecido"
 
-    # --- MÉTODOS PARA ADMINISTRAÇÃO  ---
 
     def salvar_categoria(self, nome: str, tipo: str, id_categoria: int = None) -> str:
         nova = Categoria(id_categoria=id_categoria, nome=nome, tipo=tipo)
-        self.dao.salvar(nova) # O DAO já decide se é Insert ou Update
+        self.dao.salvar(nova) 
         return "Categoria salva com sucesso."
 
     def excluir_categoria(self, id_categoria: int) -> str:

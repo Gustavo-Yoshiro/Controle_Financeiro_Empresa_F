@@ -7,33 +7,28 @@ class DividasPage:
         self.bol = boleto_service
         self.emp = emprestimo_service
         self.cfg = config_service 
-        self.cred = credito_service # Serviço de Crédito
+        self.cred = credito_service
 
     def render(self):
         st.title("💸 Gestão de Dívidas e Crédito")
         
-        # Abas Principais
         tab_boletos, tab_cartao, tab_emprestimos = st.tabs([
             "🧾 Boletos Avulsos", 
             "💳 Cartão de Crédito", 
             "🏦 Empréstimos"
         ])
 
-        # =====================================================================
-        # ABA 1: BOLETOS (CONTAS AVULSAS)
-        # =====================================================================
+        #  BOLETOS (CONTAS AVULSAS)
         with tab_boletos:
             bancos_opcoes = self.cfg.listar_bancos() or ["Dinheiro"]
             cats_dicts = self.cfg.listar_categorias()
             mapa_cats = {c['nome']: c['id'] for c in cats_dicts}
 
-            # Totais
             try:
                 totais = self.bol.calcular_totais()
                 st.metric("Total Pendente (Boletos Avulsos)", f"R$ {totais['total_geral']:.2f}")
             except: pass
 
-            # Form novo boleto
             with st.expander("➕ Agendar Nova Conta (Água, Luz...)", expanded=False):
                 with st.form("form_novo_boleto", clear_on_submit=True):
                     c1, c2 = st.columns(2)
@@ -50,7 +45,6 @@ class DividasPage:
 
             st.divider()
             
-            # Lista apenas boletos que NÃO são de cartão
             boletos = self.bol.listar_boletos_detalhados()
             
             if boletos:
@@ -81,11 +75,8 @@ class DividasPage:
             else:
                 st.success("Tudo pago nos boletos avulsos! 🎉")
 
-        # =====================================================================
-        # ABA 2: CARTÃO DE CRÉDITO (O DASHBOARD COMPLETO)
-        # =====================================================================
+        #  CARTÃO DE CRÉDITO (O DASHBOARD COMPLETO)
         with tab_cartao:
-            # Sub-abas do Cartão de Crédito
             sub_dash, sub_compra, sub_faturas, sub_config = st.tabs([
                 "📊 Visão Geral",
                 "🛍️ Lançar Compra", 
@@ -93,7 +84,6 @@ class DividasPage:
                 "⚙️ Configurar Cartões"
             ])
 
-            # --- SUB 1: DASHBOARD DE LIMITES ---
             with sub_dash:
                 cartoes = self.cred.listar_nomes_cartoes()
                 faturas = self.cred.listar_faturas_agrupadas()
@@ -101,11 +91,9 @@ class DividasPage:
                 if not cartoes:
                     st.warning("⚠️ Nenhum cartão cadastrado. Vá na aba 'Configurar Cartões' para começar.")
                 else:
-                    # Variáveis para o Resumo Geral
                     limite_global = 0.0
                     usado_global = 0.0
                     
-                    # Calcular o geral primeiro
                     infos_cartoes = {}
                     for cartao in cartoes:
                         info = self.cred.get_info_limite(cartao)
@@ -115,7 +103,6 @@ class DividasPage:
                     
                     disp_global = limite_global - usado_global
 
-                    # Renderiza o Resumo Global no Topo
                     st.markdown("### 🏦 Resumo Consolidado de Crédito")
                     c1, c2, c3 = st.columns(3)
                     c1.metric("Limite Total (Todos)", f"R$ {limite_global:,.2f}")
@@ -125,7 +112,6 @@ class DividasPage:
                     st.divider()
                     st.markdown("### 💳 Detalhamento por Cartão")
 
-                    # Renderiza um Card para cada Cartão
                     for cartao in cartoes:
                         info = infos_cartoes[cartao]
                         
@@ -152,7 +138,6 @@ class DividasPage:
                                 col_fat.metric("Fatura Atual/Próxima", "R$ 0,00", 
                                             delta="Tudo limpo! 🎉", delta_color="normal")
 
-            # --- SUB 2: LANÇAR COMPRA ---
             with sub_compra:
                 cartoes_disponiveis = self.cred.listar_nomes_cartoes()
                 
@@ -196,7 +181,6 @@ class DividasPage:
                                 else:
                                     st.error(msg)
 
-            # --- SUB 3: VISUALIZAR E PAGAR FATURAS ---
             with sub_faturas:
                 st.caption("Aqui suas compras são agrupadas automaticamente pelo mês de vencimento.")
                 
@@ -240,7 +224,6 @@ class DividasPage:
                 else:
                     st.success("Tudo pago! Nenhuma fatura de cartão em aberto. 🎉")
 
-            # --- SUB 4: CONFIGURAR CARTÕES ---
             with sub_config:
                 st.caption("Cadastre seus cartões e limites.")
                 with st.form("form_novo_cartao", clear_on_submit=True):
@@ -269,9 +252,7 @@ class DividasPage:
                 else:
                     st.caption("Nenhum cartão cadastrado.")
 
-        # =====================================================================
-        # ABA 3: EMPRÉSTIMOS
-        # =====================================================================
+        #  EMPRÉSTIMOS
         with tab_emprestimos:
             bancos_opcoes = self.cfg.listar_bancos() or ["Dinheiro"]
             

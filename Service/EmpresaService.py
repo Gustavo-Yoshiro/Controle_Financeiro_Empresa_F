@@ -22,7 +22,6 @@ class EmpresaService:
         lista = self.dao.listar_todas()
         return {e.razao_social: e.id_empresa for e in lista}
 
-    # --- MÉTODOS ADMINISTRATIVOS (CRUD) ---
 
     def admin_listar_todas(self) -> List[Empresa]:
         return self.dao.listar_todas()
@@ -34,7 +33,7 @@ class EmpresaService:
             emp.cnpj = cnpj
             emp.telefone = tel
             
-            self.dao.salvar(emp) # O DAO identifica o ID e faz Update
+            self.dao.salvar(emp) 
             return "Empresa atualizada."
         return "Erro: Empresa não encontrada."
 

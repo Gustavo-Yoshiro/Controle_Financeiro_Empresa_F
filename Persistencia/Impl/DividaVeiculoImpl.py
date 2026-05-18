@@ -32,7 +32,6 @@ class DividaVeiculoImpl:
         rows = self.__bd.executar_query(sql, (id_veiculo,))
         return [DividaVeiculo(id_divida=r[0], id_veiculo=r[1], descricao=r[2], valor=r[3], data_vencimento=r[4], status=r[5]) for r in rows]
 
-    # --- NOVO MÉTODO ADICIONADO AQUI ---
     def listar_todas(self) -> List[DividaVeiculo]:
         """Lista todas as dívidas de todos os veículos (Usado no Dashboard Financeiro)"""
         sql = "SELECT id_divida, id_veiculo, descricao, valor, data_vencimento, status FROM divida_veiculo ORDER BY data_vencimento ASC"

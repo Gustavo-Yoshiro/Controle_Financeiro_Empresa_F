@@ -4,34 +4,26 @@ from datetime import date, datetime
 
 class FinanceiroPage:
     def __init__(self, financeiro_service, categoria_service, relatorio_service, config_service):
-        self.s_financeiro = financeiro_service  # Facade para escrita
-        self.s_categoria = categoria_service    # Leitura de categorias
-        self.s_relatorio = relatorio_service    # Leitura de extratos
-        self.cfg = config_service               # Configurações (Bancos/Formas)
+        self.s_financeiro = financeiro_service  
+        self.s_categoria = categoria_service    
+        self.s_relatorio = relatorio_service    
+        self.cfg = config_service               
 
     def render(self):
         st.title("📝 Transações Avulsas")
         
-        # =====================================================================
-        # 1. CARREGAR DADOS AUXILIARES
-        # =====================================================================
         
         bancos_opcoes = self.cfg.listar_bancos() or ["Dinheiro"]
         formas_opcoes = self.cfg.listar_formas() or ["Dinheiro"]
         
-        # Busca categorias e separa por tipo para facilitar a vida do usuário
         todas_cats = self.s_categoria.listar_todas()
         
         opcoes_receita = {c['nome']: c['id'] for c in todas_cats if c['tipo'] == 'receita'}
         opcoes_despesa = {c['nome']: c['id'] for c in todas_cats if c['tipo'] == 'despesa'}
 
-        # Fallbacks de segurança caso não tenha categorias cadastradas
         if not opcoes_receita: opcoes_receita = {"Geral (R)": 1}
         if not opcoes_despesa: opcoes_despesa = {"Geral (D)": 2}
 
-        # =====================================================================
-        # 2. ÁREA DE FILTROS (EXTRATO)
-        # =====================================================================
         
         with st.expander("🔍 Filtros do Extrato", expanded=False):
             fc1, fc2, fc3, fc4 = st.columns(4)
@@ -43,16 +35,12 @@ class FinanceiroPage:
 
         st.divider()
 
-        # =====================================================================
-        # 3. FORMULÁRIOS DE LANÇAMENTO (EXPANSÍVEIS)
-        # =====================================================================
+        #FORMULÁRIOS DE LANÇAMENTO 
 
         c1, c2 = st.columns(2)
         
-        # --- Form Receita ---
         with c1:
             with st.expander("➕ Nova Receita", expanded=False):
-                # clear_on_submit=True limpa o formulário após o sucesso
                 with st.form("form_rec", clear_on_submit=True):
                     desc = st.text_input("Descrição (Ex: Freelance, Venda)")
                     val = st.number_input("Valor (R$)", min_value=0.01)
@@ -83,10 +71,8 @@ class FinanceiroPage:
                             else:
                                 st.error(res["msg"])
 
-        # --- Form Despesa ---
         with c2:
             with st.expander("➖ Nova Despesa", expanded=False):
-                # AVISO IMPORTANTE: Direciona o usuário para a tela correta
                 st.info("ℹ️ Para compras parceladas ou no **Crédito**, utilize a página **Dívidas & Boletos**.")
                 
                 with st.form("form_des", clear_on_submit=True):
@@ -101,14 +87,11 @@ class FinanceiroPage:
                     c_b, c_f = st.columns(2)
                     banco = c_b.selectbox("Origem", bancos_opcoes, key="bk_des")
                     
-                    # FILTRO DE SEGURANÇA:
-                    # Remove "Crédito" das opções para impedir lançamento errado no fluxo de caixa
                     formas_validas = [f for f in formas_opcoes if "Crédito" not in f and "Credito" not in f]
-                    if not formas_validas: formas_validas = formas_opcoes # Fallback caso sobre nada
+                    if not formas_validas: formas_validas = formas_opcoes 
                     
                     forma = c_f.selectbox("Forma", formas_validas, key="fm_des")
                     
-                    # --- NOVO: CHECKBOX PERMITIR NEGATIVO ---
                     permitir = st.checkbox("Permitir Ficar Negativo?", value=False, help="Marque para autorizar o lançamento mesmo sem saldo suficiente em caixa.")
                     
                     if st.form_submit_button("Salvar Despesa", width='stretch'):
@@ -122,16 +105,14 @@ class FinanceiroPage:
                                 data_gasto=str(dt), 
                                 banco=banco, 
                                 forma=forma,
-                                permitir_negativo=permitir # <--- Passando o parâmetro
+                                permitir_negativo=permitir 
                             )
                             if res.get("sucesso"):
                                 st.success(res["msg"])
                             else:
                                 st.error(res["msg"])
 
-        # =====================================================================
-        # 4. EXTRATO DETALHADO
-        # =====================================================================
+        #  EXTRATO DETALHADO
         st.subheader("Extrato do Período")
 
         dados = self.s_relatorio.gerar_extrato(

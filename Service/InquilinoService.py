@@ -20,17 +20,14 @@ class InquilinoService:
         lista = self.dao.listar_todos()
         return {i.nome: i.id_inquilino for i in lista}
 
-    # --- Área Administrativa (CRUD) ---
     
     def admin_listar_todos(self) -> List[Inquilino]:
         return self.dao.listar_todos()
 
     def admin_editar(self, id_i: int, nome: str, cpf: str, telefone: str, 
                      sexo: str, est_civil: str, prof: str, email: str, obs: str) -> str:
-        # Busca o original
         i = self.dao.buscar_por_id(id_i)
         if i:
-            # Atualiza todos os campos
             i.nome = nome
             i.cpf = cpf
             i.telefone = telefone
@@ -40,12 +37,10 @@ class InquilinoService:
             i.email = email
             i.obs = obs
             
-            self.dao.salvar(i) # Smart Save faz o Update
+            self.dao.salvar(i) 
             return "Dados do inquilino atualizados."
         return "Erro: Inquilino não encontrado."
 
     def admin_excluir(self, id_i: int) -> str:
-        # Idealmente, verificar se tem contrato ativo antes de excluir
-        # Mas o banco provavelmente travará por Foreign Key se tiver, então está seguro.
         self.dao.deletar(id_i)
         return "Inquilino excluído."

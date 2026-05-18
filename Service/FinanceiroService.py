@@ -8,7 +8,6 @@ class FinanceiroService:
     def __init__(self):
         self.dao = MovimentacaoImpl()
 
-    # --- MÉTODO AUXILIAR ---
     def _tratar_data(self, data_input) -> str:
         """
         Normaliza a data para string SQL (YYYY-MM-DD HH:MM:SS).
@@ -32,28 +31,22 @@ class FinanceiroService:
             
         return datetime.combine(data_input, agora).strftime("%Y-%m-%d %H:%M:%S")
 
-    # --- NOVO: VERIFICAÇÃO DE SALDO ---
     def get_saldo_atual(self) -> float:
         """Calcula quanto tem de dinheiro real no banco agora"""
-        # Pega desde o inicio dos tempos até hoje para saber o saldo real
         movs = self.dao.listar_periodo("2000-01-01", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         receitas = sum(m.valor for m in movs if m.valor > 0)
         despesas = sum(m.valor for m in movs if m.valor < 0)
         return receitas + despesas
 
-    # --- REGISTRO DE TRANSAÇÕES (CORE) ---
 
     def registrar_gasto_manual(self, descricao: str, valor: float, id_categoria: int, 
                                data_gasto: str, banco: str, forma: str,
                                id_veiculo: int = None, id_divida_veiculo: int = None,
-                               permitir_negativo: bool = False) -> Dict: # Mudou retorno para Dict
+                               permitir_negativo: bool = False) -> Dict: 
         try:
-            # 1. Garante valor negativo
             valor_abs = abs(float(valor))
             valor_final = -valor_abs
             
-            # 2. VERIFICAÇÃO DE SALDO (A Lógica do "Não tenho dinheiro")
-            # Se não for Crédito (pois crédito não baixa saldo, gera boleto)
             if forma != "Crédito":
                 saldo_atual = self.get_saldo_atual()
                 if saldo_atual < valor_abs and not permitir_negativo:
@@ -62,7 +55,6 @@ class FinanceiroService:
                         "msg": f"🚫 Saldo Insuficiente! Você tem R$ {saldo_atual:.2f} e quer gastar R$ {valor_abs:.2f}. Marque 'Permitir Negativo' se for cheque especial."
                     }
 
-            # 3. Trata a data (adiciona hora)
             data_final = self._tratar_data(data_gasto)
             
             mov = Movimentacao(
@@ -84,7 +76,7 @@ class FinanceiroService:
                                  data: str, banco: str, forma: str,
                                  id_kitnet: int = None, 
                                  id_pagamento_aluguel: int = None,
-                                 id_pagamento_alocacao: int = None) -> Dict: # Mudou retorno para Dict
+                                 id_pagamento_alocacao: int = None) -> Dict:
         try:
             valor_final = abs(float(valor))
             data_final = self._tratar_data(data)
@@ -105,8 +97,6 @@ class FinanceiroService:
         except Exception as e:
             return {"sucesso": False, "msg": f"Erro ao lançar receita: {e}"}
 
-    # --- MÉTODOS DE COMPATIBILIDADE (Para não quebrar chamadas antigas que esperam string) ---
-    # Convertemos o Dict de resposta para String simples para manter compatibilidade
     
     def registrar_despesa_veiculo(self, descricao: str, valor: float, id_veiculo: int, 
                                   data: str, banco: str, forma: str) -> str:
@@ -136,7 +126,6 @@ class FinanceiroService:
         except Exception as e:
             return f"Erro: {e}"
 
-    # --- LEITURA, RELATÓRIOS E KPI ---
 
     def consultar_extrato(self, data_inicio: str, data_fim: str) -> List[Dict]:
         """ Usado pelo RelatorioService ou visualizações simples """
@@ -168,7 +157,6 @@ class FinanceiroService:
         saldo = receitas + despesas 
         return {"receitas": receitas, "despesas": despesas, "saldo": saldo}
 
-    # --- ÁREA ADMINISTRATIVA ---
 
     def gerar_extrato_detalhado(self, data_inicio: str, data_fim: str) -> List[Dict]:
         movs = self.dao.listar_periodo(data_inicio, data_fim)

@@ -6,7 +6,6 @@ from Service import FinanceiroService
 class FrotaService:
     def __init__(self, financeiro_service: FinanceiroService = None):
         self.dao_veiculo = VeiculoImpl()
-        # Injeção opcional
         self.fin_service = financeiro_service if financeiro_service else FinanceiroService()
 
     def cadastrar(self, modelo: str, placa: str, ano: int, finalidade: str) -> str:
@@ -31,7 +30,6 @@ class FrotaService:
         nome_carro = f"{veiculo.modelo} ({veiculo.placa})"
         desc_final = f"[{nome_carro}] {descricao}"
         
-        # Chama o Facade Financeiro (Garante ID Categoria correto lá dentro)
         return self.fin_service.registrar_despesa_veiculo(
             descricao=desc_final, 
             valor=valor, 
@@ -49,7 +47,6 @@ class FrotaService:
             "label": f"{v.modelo} - {v.placa} ({v.status})"
         } for v in veiculos]
 
-    # --- ADMINISTRAÇÃO (CRUD) ---
     
     def admin_listar_todos(self) -> List[Veiculo]:
         return self.dao_veiculo.listar_todos()
@@ -62,7 +59,7 @@ class FrotaService:
             v.ano = ano
             v.finalidade = finalidade
             v.status = status
-            self.dao_veiculo.salvar(v) # Smart Save
+            self.dao_veiculo.salvar(v) 
             return "Veículo atualizado."
         return "Erro: Veículo não encontrado."
 

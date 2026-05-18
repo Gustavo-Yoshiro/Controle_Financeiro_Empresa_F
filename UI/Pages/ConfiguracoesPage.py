@@ -19,7 +19,6 @@ class ConfiguracoesPage:
     def render(self):
         st.title("⚙️ Painel de Controle e Correções")
 
-        # Criação das Abas
         tab_geral, tab_pix, tab_kit, tab_inq, tab_veic, tab_fin, tab_div = st.tabs([
             "🏦 Geral", 
             "💠 Pix", 
@@ -30,14 +29,11 @@ class ConfiguracoesPage:
             "📑 Dívidas"
         ])
 
-        # =====================================================================
-        # 1. GERAL (BANCOS E CATEGORIAS)
-        # =====================================================================
+        #  GERAL (BANCOS E CATEGORIAS)
         with tab_geral:
             st.subheader("Cadastros Básicos")
             c1, c2 = st.columns(2)
             
-            # --- BANCOS ---
             with c1:
                 with st.expander("Gerenciar Bancos"):
                     novo_banco = st.text_input("Adicionar Novo Banco")
@@ -61,7 +57,6 @@ class ConfiguracoesPage:
                             if "sucesso" in msg: st.success(msg); st.rerun()
                             else: st.error(msg)
 
-            # --- CATEGORIAS ---
             with c2:
                 with st.expander("Gerenciar Categorias"):
                     nc_nome = st.text_input("Nova Categoria")
@@ -93,9 +88,7 @@ class ConfiguracoesPage:
                             if "removida" in msg: st.success(msg); st.rerun()
                             else: st.error(msg)
 
-        # =====================================================================
-        # 2. PIX (COM VALIDAÇÃO COMPLETA)
-        # =====================================================================
+        #  PIX (COM VALIDAÇÃO COMPLETA)
         with tab_pix:
             st.subheader("Gerenciar Chaves PIX")
             
@@ -112,7 +105,6 @@ class ConfiguracoesPage:
                     titular = c5.text_input("Titular")
                     
                     if st.form_submit_button("Salvar Chave"):
-                        # --- VALIDAÇÃO NA CRIAÇÃO ---
                         erro_pix = None
                         if not chave:
                             erro_pix = "A chave é obrigatória."
@@ -163,7 +155,6 @@ class ConfiguracoesPage:
 
                         col_s, col_d = st.columns(2)
                         if col_s.form_submit_button("💾 Salvar Alterações"):
-                            # --- VALIDAÇÃO NA EDIÇÃO ---
                             erro_pix_edit = None
                             if not n_chave:
                                 erro_pix_edit = "A chave não pode ficar vazia."
@@ -192,9 +183,7 @@ class ConfiguracoesPage:
                             st.success("Removido!")
                             st.rerun()
 
-        # =====================================================================
-        # 3. KITNETS
-        # =====================================================================
+        #  KITNETS
         with tab_kit:
             st.subheader("Corrigir Kitnets")
             
@@ -209,7 +198,6 @@ class ConfiguracoesPage:
                 with st.form("edit_kit_form"):
                     c1, c2 = st.columns(2)
                     opts_ident = ["M1", "M2", "K", "Casa", "Apto"]
-                    # Verifica se o valor existe na lista antes de pegar o index
                     idx_ident = opts_ident.index(obj_k.identificador) if obj_k.identificador in opts_ident else 0
                     novo_ident = c1.selectbox("Identificador", opts_ident, index=idx_ident)
                     
@@ -232,9 +220,7 @@ class ConfiguracoesPage:
                         if "Erro" in msg: st.error(msg)
                         else: st.success(msg); st.rerun()
 
-        # =====================================================================
-        # 4. INQUILINOS (COM VALIDAÇÃO)
-        # =====================================================================
+        #  INQUILINOS (COM VALIDAÇÃO)
         with tab_inq:
             st.subheader("Corrigir Inquilinos")
             inqs = self.inq.admin_listar_todos()
@@ -255,7 +241,6 @@ class ConfiguracoesPage:
                     if st.form_submit_button("Atualizar Inquilino"):
                         erros_inq = []
                         
-                        # --- VALIDAÇÕES ---
                         if not nn or len(nn.strip()) < 3:
                             erros_inq.append("Nome é obrigatório.")
                         if ncpf and not validar_cpf(ncpf):
@@ -274,9 +259,7 @@ class ConfiguracoesPage:
             else:
                 st.info("Nenhum inquilino cadastrado.")
 
-        # =====================================================================
-        # 5. VEÍCULOS
-        # =====================================================================
+        #  VEÍCULOS
         with tab_veic:
             st.subheader("Editar Frota")
             veics = self.trans.admin_listar_todos()
@@ -309,9 +292,7 @@ class ConfiguracoesPage:
             else:
                 st.info("Sem veículos.")
 
-        # =====================================================================
-        # 6. TRANSAÇÕES
-        # =====================================================================
+        #  TRANSAÇÕES
         with tab_fin:
             st.subheader("✏️ Corrigir Lançamento no Extrato")
             c_f1, c_f2 = st.columns(2)
@@ -327,7 +308,6 @@ class ConfiguracoesPage:
                 sel_mov_txt = st.selectbox("Escolha a transação:", list(map_mov.keys()))
                 id_mov_sel = map_mov[sel_mov_txt]
                 
-                # Busca segura pelo ID
                 obj_mov = self.fin.admin_buscar_movimentacao(id_mov_sel)
                 
                 if obj_mov:
@@ -362,9 +342,7 @@ class ConfiguracoesPage:
                             st.error("Transação apagada.")
                             st.rerun()
 
-        # =====================================================================
-        # 7. DÍVIDAS
-        # =====================================================================
+        #  DÍVIDAS
         with tab_div:
             c_bol, c_emp = st.columns(2)
             

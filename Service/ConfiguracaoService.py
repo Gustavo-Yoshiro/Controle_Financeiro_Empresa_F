@@ -5,9 +5,7 @@ class ConfiguracaoService:
     def __init__(self):
         self.dao = ConfiguracaoImpl()
 
-    # =========================================================================
     # BANCOS
-    # =========================================================================
     def listar_bancos(self) -> List[str]:
         return self.dao.listar_bancos()
 
@@ -28,7 +26,6 @@ class ConfiguracaoService:
 
     def excluir_banco(self, nome: str) -> str:
         try:
-            # Regra de Negócio: Não apagar se estiver em uso
             if self.dao.banco_esta_em_uso(nome):
                 return "Não é possível excluir: Existem transações usando este banco."
             
@@ -37,9 +34,7 @@ class ConfiguracaoService:
         except Exception as e:
             return f"Erro ao excluir: {e}"
 
-    # =========================================================================
     # FORMAS DE PAGAMENTO
-    # =========================================================================
     def listar_formas(self) -> List[str]:
         return self.dao.listar_formas()
 
@@ -67,9 +62,7 @@ class ConfiguracaoService:
         except Exception as e:
             return f"Erro: {e}"
 
-    # =========================================================================
     # CATEGORIAS
-    # =========================================================================
     def listar_categorias(self) -> List[Dict]:
         return self.dao.listar_categorias()
 

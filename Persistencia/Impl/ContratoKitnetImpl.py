@@ -12,7 +12,6 @@ class ContratoKitnetImpl:
             self.atualizar(contrato)
             return contrato.id_contrato_kitnet
         else:
-            # ADICIONADO: valor_esgoto_padrao no INSERT
             sql = """
                 INSERT INTO contrato_kitnet 
                 (id_kitnet, id_inquilino, valor_fechado, valor_esgoto_padrao, data_vencimento, 
@@ -37,7 +36,6 @@ class ContratoKitnetImpl:
             return id_gerado
 
     def atualizar(self, contrato: ContratoKitnet) -> None:
-        # ADICIONADO: valor_esgoto_padrao no UPDATE
         sql = """
             UPDATE contrato_kitnet 
             SET id_kitnet=?, id_inquilino=?, valor_fechado=?, valor_esgoto_padrao=?, 
@@ -49,7 +47,7 @@ class ContratoKitnetImpl:
             contrato.id_kitnet, 
             contrato.id_inquilino, 
             contrato.valor_fechado, 
-            contrato.valor_esgoto_padrao, # <--- Novo
+            contrato.valor_esgoto_padrao, 
             contrato.data_vencimento, 
             contrato.data_inicio, 
             contrato.data_fim, 
@@ -66,7 +64,6 @@ class ContratoKitnetImpl:
         self.__bd.executar(sql, (id_contrato,))
 
     def listar_ativos(self) -> List[ContratoKitnet]:
-        # ADICIONADO: valor_esgoto_padrao no SELECT
         sql = """
             SELECT id_contrato_kitnet, id_kitnet, id_inquilino, valor_fechado, valor_esgoto_padrao,
                    data_vencimento, data_inicio, data_fim, ativo, mobiliado, 
@@ -76,14 +73,13 @@ class ContratoKitnetImpl:
         """
         rows = self.__bd.executar_query(sql)
         
-        # Mapeamento atualizado com os novos índices
         return [
             ContratoKitnet(
                 id_contrato_kitnet=r[0], 
                 id_kitnet=r[1], 
                 id_inquilino=r[2], 
                 valor_fechado=r[3], 
-                valor_esgoto_padrao=r[4], # <--- Novo índice 4
+                valor_esgoto_padrao=r[4], 
                 data_vencimento=r[5], 
                 data_inicio=r[6], 
                 data_fim=r[7], 
@@ -95,7 +91,6 @@ class ContratoKitnetImpl:
         ]
     
     def buscar_por_id(self, id_contrato: int) -> Optional[ContratoKitnet]:
-        # ADICIONADO: valor_esgoto_padrao no SELECT
         sql = """
             SELECT id_contrato_kitnet, id_kitnet, id_inquilino, valor_fechado, valor_esgoto_padrao,
                    data_vencimento, data_inicio, data_fim, ativo, mobiliado, 
@@ -111,7 +106,7 @@ class ContratoKitnetImpl:
                 id_kitnet=row[1], 
                 id_inquilino=row[2], 
                 valor_fechado=row[3], 
-                valor_esgoto_padrao=row[4], # <--- Novo índice 4
+                valor_esgoto_padrao=row[4], 
                 data_vencimento=row[5], 
                 data_inicio=row[6], 
                 data_fim=row[7], 

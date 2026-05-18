@@ -12,7 +12,6 @@ class BoletoService:
         self.cat_service = CategoriaService() 
         self.fin_service = financeiro_service if financeiro_service else FinanceiroService()
 
-    # --- 1. CADASTRO DE BOLETO COMUM ---
     def cadastrar_boleto(self, descricao: str, valor: float, vencimento: str, id_categoria: int = 2, codigo: str = "") -> str:
         """ Cadastra um boleto comum (Água, Luz, Internet) """
         novo = Boleto(
@@ -21,18 +20,16 @@ class BoletoService:
             data_vencimento=vencimento,
             id_categoria=id_categoria,
             codigo_barras=codigo,
-            banco_cartao=None, # Garante que não é cartão
+            banco_cartao=None,
             status='pendente'
         )
         self.dao_boleto.salvar(novo)
         return "Boleto agendado com sucesso."
 
-    # --- 2. LISTAGEM E PAGAMENTO ---
     def listar_boletos_detalhados(self) -> List[Dict]:
         """ Lista apenas boletos que NÃO são de cartão de crédito """
         todos = self.dao_boleto.listar_todos()
         
-        # FILTRO: Apenas pendentes E que NÃO têm banco_cartao
         boletos = [b for b in todos if b.status == 'pendente' and not b.banco_cartao]
         
         categorias = self.cat_service.listar_todas() 
@@ -74,11 +71,9 @@ class BoletoService:
         if not boleto: return "Erro: Boleto não encontrado."
         if boleto.status == 'pago': return "Erro: Já pago."
 
-        # 1. Atualiza Boleto para Pago
         boleto.status = 'pago'
         self.dao_boleto.salvar(boleto)
 
-        # 2. Lança a Saída no Financeiro
         data_hoje = date.today().strftime("%Y-%m-%d")
         
         self.fin_service.registrar_gasto_manual(
@@ -94,11 +89,9 @@ class BoletoService:
     def calcular_totais(self) -> Dict:
         """ Calcula total pendente APENAS de boletos comuns """
         todos = self.dao_boleto.listar_todos()
-        # Filtra pendentes que NÃO são cartão
         total_pagar = sum(b.valor for b in todos if b.status == 'pendente' and not b.banco_cartao)
         return {"total_geral": total_pagar}
 
-    # --- MÉTODOS ADM ---
     def admin_listar_todos(self) -> List[Boleto]:
         return self.dao_boleto.listar_todos()
 

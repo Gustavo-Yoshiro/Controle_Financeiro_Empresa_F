@@ -12,7 +12,6 @@ class PagamentoAlocacaoImpl:
             self.atualizar(pag)
             return pag.id_pagamento_alocacao
         else:
-            # --- CORREÇÃO 1: Adicionado valor_pago no INSERT ---
             sql = """
                 INSERT INTO pagamento_alocacao 
                 (id_contrato_alocacao, mes_referencia, valor_esperado, valor_pago, status, data_pagamento) 
@@ -31,7 +30,6 @@ class PagamentoAlocacaoImpl:
             return id_gerado
 
     def atualizar(self, pag: PagamentoAlocacao) -> None:
-        # --- CORREÇÃO 2: Adicionado valor_pago no UPDATE ---
         sql = """
             UPDATE pagamento_alocacao 
             SET id_contrato_alocacao=?, mes_referencia=?, valor_esperado=?, valor_pago=?, status=?, data_pagamento=? 
@@ -53,7 +51,6 @@ class PagamentoAlocacaoImpl:
         self.__bd.executar(sql, (id_pagamento,))
 
     def buscar_por_id(self, id_pagamento: int) -> Optional[PagamentoAlocacao]:
-        # --- CORREÇÃO 3: Adicionado valor_pago no SELECT ---
         sql = """
             SELECT id_pagamento_alocacao, id_contrato_alocacao, mes_referencia, valor_esperado, valor_pago, status, data_pagamento 
             FROM pagamento_alocacao WHERE id_pagamento_alocacao = ?

@@ -12,7 +12,6 @@ class CreditoService:
         self.dao_boleto = BoletoImpl() # Acessa a tabela onde as compras estão salvas
         self.fin_service = financeiro_service if financeiro_service else FinanceiroService()
 
-    # --- 1. CONFIGURAÇÃO ---
     def cadastrar_config_cartao(self, nome: str, dia_fech: int, dia_venc: int, limite: float, bandeira: str = "") -> str:
         if not nome: return "Erro: Nome do cartão é obrigatório."
         novo_cartao = CartaoCredito(nome=nome, dia_fechamento=dia_fech, dia_vencimento=dia_venc, limite=limite, bandeira=bandeira)
@@ -23,7 +22,6 @@ class CreditoService:
         cartoes = self.dao_cartao.listar_todos()
         return [c.nome for c in cartoes] if cartoes else []
 
-    # --- NOVO: CÁLCULO DE LIMITE ---
     def get_info_limite(self, nome_cartao: str) -> Dict:
         """
         Calcula o limite total, usado e disponível baseando-se nas parcelas pendentes.
@@ -34,11 +32,8 @@ class CreditoService:
         
         limite_total = cartao.limite
         
-        # Busca todas as dívidas pendentes deste cartão
         todos_boletos = self.dao_boleto.listar_todos()
         
-        # O Pulo do Gato: Soma TUDO que é 'pendente' ligado a esse cartão.
-        # Isso inclui a fatura do mês atual E as parcelas de 2026, 2027...
         usado = sum(b.valor for b in todos_boletos if b.banco_cartao == nome_cartao and b.status == 'pendente')
         
         return {
@@ -47,17 +42,14 @@ class CreditoService:
             "disponivel": limite_total - usado
         }
 
-    # --- 2. LANÇAMENTO INTELIGENTE (COM TRAVA DE LIMITE) ---
     def registrar_compra_inteligente(self, descricao: str, valor_total: float, data_compra_str: str, 
                                      id_categoria: int, nome_cartao: str, parcelas: int = 1) -> str:
         try:
-            # 1. Validação de Limite
             info_limite = self.get_info_limite(nome_cartao)
-            if info_limite['total'] > 0: # Só valida se tiver limite configurado (> 0)
+            if info_limite['total'] > 0: 
                 if valor_total > info_limite['disponivel']:
                     return f"Erro: Limite Insuficiente! Compra: R$ {valor_total:.2f} | Disponível: R$ {info_limite['disponivel']:.2f}"
 
-            # 2. Busca configurações do cartão (dias)
             cartao = self.dao_cartao.buscar_por_nome(nome_cartao)
             dia_fech = cartao.dia_fechamento if cartao else 1
             dia_venc = cartao.dia_vencimento if cartao else 10
@@ -65,7 +57,6 @@ class CreditoService:
             data_compra = datetime.strptime(data_compra_str, "%Y-%m-%d")
             valor_parcela = valor_total / parcelas
 
-            # Lógica da Data da Primeira Parcela
             meses_add = 1 if data_compra.day > dia_fech else 0
             data_base = data_compra + relativedelta(months=meses_add)
             
@@ -85,7 +76,7 @@ class CreditoService:
                     data_vencimento=vencimento_parcela.strftime("%Y-%m-%d"),
                     id_categoria=id_categoria,
                     codigo_barras="",
-                    banco_cartao=nome_cartao, # Liga ao cartão
+                    banco_cartao=nome_cartao, 
                     status='pendente',
                     obs=f"Compra em {data_compra_str}"
                 )
@@ -95,7 +86,6 @@ class CreditoService:
         except Exception as e:
             return f"Erro ao processar compra: {e}"
 
-    # --- 3. GESTÃO DE FATURAS ---
     def listar_faturas_agrupadas(self) -> Dict[str, Dict]:
         todos = self.dao_boleto.listar_todos()
         pendentes = [b for b in todos if b.status == 'pendente' and b.banco_cartao]
@@ -139,7 +129,7 @@ class CreditoService:
 
         for b in itens_fatura:
             b.status = 'pago'
-            self.dao_boleto.salvar(b) # Baixa a parcela = Libera Limite automaticamente (pois não é mais 'pendente')
+            self.dao_boleto.salvar(b) 
 
         data_hoje = date.today().strftime("%Y-%m-%d")
         try: dt_br = datetime.strptime(data_alvo, "%Y-%m-%d").strftime("%d/%m")

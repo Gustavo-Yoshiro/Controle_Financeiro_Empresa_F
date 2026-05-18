@@ -11,7 +11,6 @@ class EmprestimoImpl:
             self.atualizar(emp)
             return emp.id_emprestimo
         else:
-            # ADICIONADO: data_primeira_parcela no INSERT
             sql = """
                 INSERT INTO emprestimo 
                 (descricao, valor_total, valor_parcela, qtd_parcelas, juros_mensal, 
@@ -25,7 +24,7 @@ class EmprestimoImpl:
                 emp.qtd_parcelas, 
                 emp.juros_mensal, 
                 emp.data_inicio, 
-                emp.data_primeira_parcela, # <--- NOVO
+                emp.data_primeira_parcela, 
                 emp.banco_origem,
                 emp.valor_pago,
                 emp.status
@@ -35,7 +34,6 @@ class EmprestimoImpl:
             return id_gerado
 
     def atualizar(self, emp: Emprestimo) -> None:
-        # ADICIONADO: data_primeira_parcela no UPDATE
         sql = """
             UPDATE emprestimo 
             SET descricao=?, valor_total=?, valor_parcela=?, qtd_parcelas=?, 
@@ -50,7 +48,7 @@ class EmprestimoImpl:
             emp.qtd_parcelas, 
             emp.juros_mensal, 
             emp.data_inicio, 
-            emp.data_primeira_parcela, # <--- NOVO
+            emp.data_primeira_parcela, 
             emp.banco_origem,
             emp.valor_pago,
             emp.status,
@@ -59,7 +57,6 @@ class EmprestimoImpl:
         self.__bd.executar(sql, parametros)
 
     def listar_todos(self) -> List[Emprestimo]:
-        # ADICIONADO: data_primeira_parcela no SELECT (índice 7)
         sql = """
             SELECT id_emprestimo, descricao, valor_total, valor_parcela, qtd_parcelas, 
                    juros_mensal, data_inicio, data_primeira_parcela, banco_origem, valor_pago, status 
@@ -75,7 +72,7 @@ class EmprestimoImpl:
                 qtd_parcelas=r[4], 
                 juros_mensal=r[5], 
                 data_inicio=r[6], 
-                data_primeira_parcela=r[7], # <--- NOVO
+                data_primeira_parcela=r[7], 
                 banco_origem=r[8], 
                 valor_pago=r[9] if r[9] is not None else 0.0,
                 status=r[10]
@@ -83,7 +80,6 @@ class EmprestimoImpl:
         ]
 
     def buscar_por_id(self, id_emp: int) -> Optional[Emprestimo]:
-        # ADICIONADO: data_primeira_parcela no SELECT WHERE ID
         sql = """
             SELECT id_emprestimo, descricao, valor_total, valor_parcela, qtd_parcelas, 
                    juros_mensal, data_inicio, data_primeira_parcela, banco_origem, valor_pago, status 
@@ -99,7 +95,7 @@ class EmprestimoImpl:
                 qtd_parcelas=row[4], 
                 juros_mensal=row[5], 
                 data_inicio=row[6], 
-                data_primeira_parcela=row[7], # <--- NOVO
+                data_primeira_parcela=row[7], 
                 banco_origem=row[8], 
                 valor_pago=row[9] if row[9] is not None else 0.0,
                 status=row[10]
