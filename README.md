@@ -22,8 +22,8 @@ Para correr este projeto na tua máquina local, precisarás ter o Python 3.9+ e 
 
 1. Clonar o repositório:
 
-git clone [https://github.com/Gustavo-Yoshiro/nome-do-repositorio.git](https://github.com/Gustavo-Yoshiro/nome-do-repositorio.git)
-cd nome-do-repositorio
+git clone [https://github.com/Gustavo-Yoshiro/nome-do-repositorio.git](https://github.com/Gustavo-Yoshiro/Controle_Financeiro_Empresa_F.git)
+cd Controle_Financeiro_Empresa_F
 
 
 2. Criar e ativar um ambiente virtual (Recomendado):
@@ -102,6 +102,3 @@ GitHub: @Gustavo-Yoshiro
 
 LinkedIn: gustavosaitodev
 
-📄 Licença
-
-Este projeto está sob a licença MIT. Consulta o ficheiro LICENSE para obter mais detalhes.
