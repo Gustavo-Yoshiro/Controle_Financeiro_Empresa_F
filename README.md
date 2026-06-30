@@ -22,7 +22,7 @@ Para correr este projeto na tua máquina local, precisarás ter o Python 3.9+ e 
 
 1. Clonar o repositório:
 
-git clone [https://github.com/Gustavo-Yoshiro/nome-do-repositorio.git](https://github.com/Gustavo-Yoshiro/Controle_Financeiro_Empresa_F.git)
+git clone [https://github.com/Gustavo-Yoshiro/Controle_Financeiro_Empresa_F.git](https://github.com/Gustavo-Yoshiro/Controle_Financeiro_Empresa_F.git)
 cd Controle_Financeiro_Empresa_F
 
 
@@ -98,7 +98,7 @@ Diretórios uploads_contratos/ e uploads_comprovantes/
 
 Criado e mantido por Gustavo Saito.
 
-GitHub: @Gustavo-Yoshiro
+GitHub: @Gustavo-Yoshiro (https://github.com/Gustavo-Yoshiro)
 
-LinkedIn: gustavosaitodev
+LinkedIn: gustavosaitodev (https://www.linkedin.com/in/gustavosaitodev/)
 
