@@ -98,7 +98,7 @@ Diretórios uploads_contratos/ e uploads_comprovantes/
 
 Criado e mantido por Gustavo Saito.
 
-GitHub: @Gustavo-Yoshiro (https://github.com/Gustavo-Yoshiro)
+GitHub: [@Gustavo-Yoshiro] (https://github.com/Gustavo-Yoshiro)
 
-LinkedIn: gustavosaitodev (https://www.linkedin.com/in/gustavosaitodev/)
+LinkedIn: [gustavosaitodev] (https://www.linkedin.com/in/gustavosaitodev/)
 
